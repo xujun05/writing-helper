@@ -109,6 +109,12 @@ npm run dev
 4. 推送到分支 (`git push origin feature/amazing-feature`)
 5. 开启一个 Pull Request
 
+## 贡献者
+
+<a href="https://github.com/GeekyWizKid/video_processing_service/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=GeekyWizKid/video_processing_service" />
+</a>
+
 ## 📋 待办事项
 
 - [ ] 添加更多LLM模型支持
