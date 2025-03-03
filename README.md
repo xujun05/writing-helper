@@ -111,8 +111,8 @@ npm run dev
 
 ## 贡献者
 
-<a href="https://github.com/GeekyWizKid/video_processing_service/graphs/contributors">
-  <img src="https://contrib.rocks/image?repo=GeekyWizKid/video_processing_service" />
+<a href="https://github.com/GeekyWizKid/writing-helper/graphs/contributors">
+  <img src="https://contrib.rocks/image?repo=GeekyWizKid/writing-helper" />
 </a>
 
 ## 📋 待办事项
