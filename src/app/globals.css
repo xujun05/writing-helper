@@ -10,12 +10,7 @@
   --foreground: #171717;
 }
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
-}
+/* 移除媒体查询，确保服务器和客户端使用相同的主题 */
 
 body {
   color: var(--foreground);
