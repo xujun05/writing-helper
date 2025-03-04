@@ -17,20 +17,21 @@ export default function PromptForm({ initialStyle, onStyleChange }: PromptFormPr
     
     // Handle nested fields
     if (field.includes('.')) {
-      const [parentField, childField] = field.split('.');
+      const [parentField, childField] = field.split('.') as [keyof PromptStyle, string];
       if (section === '') {
         // Handle root level fields
-        (updatedStyle as any)[field] = value;
+        (updatedStyle[parentField] as Record<string, unknown>)[childField] = value;
       } else {
         // Handle nested fields
-        (updatedStyle[section] as any)[parentField][childField] = value;
+        const sectionObj = updatedStyle[section] as unknown as Record<string, Record<string, unknown>>;
+        sectionObj[parentField][childField] = value;
       }
     } else if (section === '') {
       // Handle root level fields
-      (updatedStyle as any)[field] = value;
+      (updatedStyle as Record<string, unknown>)[field] = value;
     } else {
       // Handle section level fields
-      (updatedStyle[section] as any)[field] = value;
+      (updatedStyle[section] as Record<string, unknown>)[field] = value;
     }
     
     setStyle(updatedStyle);
@@ -46,18 +47,20 @@ export default function PromptForm({ initialStyle, onStyleChange }: PromptFormPr
 
   const handleArrayChange = (section: keyof PromptStyle, field: string, index: number, value: string) => {
     const updatedStyle = { ...style };
-    let targetArray;
+    let targetArray: string[];
     
     // Handle nested fields
     if (field.includes('.')) {
-      const [parentField, childField] = field.split('.');
-      targetArray = [...(updatedStyle[section] as any)[parentField][childField]];
+      const [parentField, childField] = field.split('.') as [keyof PromptStyle, string];
+      const sectionObj = updatedStyle[section] as unknown as Record<string, Record<string, string[]>>;
+      targetArray = [...sectionObj[parentField][childField]];
       targetArray[index] = value;
-      (updatedStyle[section] as any)[parentField][childField] = targetArray;
+      sectionObj[parentField][childField] = targetArray;
     } else {
-      targetArray = [...(updatedStyle[section] as any)[field]];
+      const sectionObj = updatedStyle[section] as unknown as Record<string, string[]>;
+      targetArray = [...sectionObj[field]];
       targetArray[index] = value;
-      (updatedStyle[section] as any)[field] = targetArray;
+      sectionObj[field] = targetArray;
     }
     
     setStyle(updatedStyle);
@@ -69,14 +72,16 @@ export default function PromptForm({ initialStyle, onStyleChange }: PromptFormPr
     
     // Handle nested fields
     if (field.includes('.')) {
-      const [parentField, childField] = field.split('.');
-      const targetArray = [...(updatedStyle[section] as any)[parentField][childField]];
+      const [parentField, childField] = field.split('.') as [keyof PromptStyle, string];
+      const sectionObj = updatedStyle[section] as unknown as Record<string, Record<string, string[]>>;
+      const targetArray = [...sectionObj[parentField][childField]];
       targetArray.push('');
-      (updatedStyle[section] as any)[parentField][childField] = targetArray;
+      sectionObj[parentField][childField] = targetArray;
     } else {
-      const targetArray = [...(updatedStyle[section] as any)[field]];
+      const sectionObj = updatedStyle[section] as unknown as Record<string, string[]>;
+      const targetArray = [...sectionObj[field]];
       targetArray.push('');
-      (updatedStyle[section] as any)[field] = targetArray;
+      sectionObj[field] = targetArray;
     }
     
     setStyle(updatedStyle);
@@ -88,14 +93,16 @@ export default function PromptForm({ initialStyle, onStyleChange }: PromptFormPr
     
     // Handle nested fields
     if (field.includes('.')) {
-      const [parentField, childField] = field.split('.');
-      const targetArray = [...(updatedStyle[section] as any)[parentField][childField]];
+      const [parentField, childField] = field.split('.') as [keyof PromptStyle, string];
+      const sectionObj = updatedStyle[section] as unknown as Record<string, Record<string, string[]>>;
+      const targetArray = [...sectionObj[parentField][childField]];
       targetArray.splice(index, 1);
-      (updatedStyle[section] as any)[parentField][childField] = targetArray;
+      sectionObj[parentField][childField] = targetArray;
     } else {
-      const targetArray = [...(updatedStyle[section] as any)[field]];
+      const sectionObj = updatedStyle[section] as unknown as Record<string, string[]>;
+      const targetArray = [...sectionObj[field]];
       targetArray.splice(index, 1);
-      (updatedStyle[section] as any)[field] = targetArray;
+      sectionObj[field] = targetArray;
     }
     
     setStyle(updatedStyle);

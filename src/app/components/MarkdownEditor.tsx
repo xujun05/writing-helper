@@ -10,6 +10,7 @@
 import React, { useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import Image from 'next/image';
 
 interface MarkdownEditorProps {
   initialContent: string;
@@ -91,7 +92,21 @@ export default function MarkdownEditor({ initialContent, onContentChange }: Mark
                     : <code className="block bg-gray-100 p-3 rounded-md text-sm font-mono overflow-x-auto my-3" {...rest}>{children}</code>;
                 },
                 a: (props) => <a className="text-blue-600 hover:underline" {...props} />,
-                img: (props) => <img className="max-w-full h-auto my-4 rounded-md" {...props} />,
+                img: (props) => {
+                  const { src, alt } = props as { src?: string; alt?: string };
+                  if (!src) return null;
+                  return (
+                    <div className="relative w-full h-64 my-4">
+                      <Image
+                        src={src}
+                        alt={alt || 'Generated content image'}
+                        fill
+                        className="object-contain rounded-md"
+                        sizes="(max-width: 768px) 100vw, (max-width: 1200px) 50vw, 33vw"
+                      />
+                    </div>
+                  );
+                },
                 table: (props) => <div className="overflow-x-auto my-4"><table className="min-w-full border-collapse border border-gray-300" {...props} /></div>,
                 th: (props) => <th className="border border-gray-300 px-4 py-2 bg-gray-100 font-medium" {...props} />,
                 td: (props) => <td className="border border-gray-300 px-4 py-2" {...props} />,

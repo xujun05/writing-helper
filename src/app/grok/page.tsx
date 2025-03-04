@@ -270,7 +270,7 @@ export default function GrokTest() {
             <div className="bg-yellow-50 p-4 rounded-lg border border-yellow-200 text-sm text-gray-700">
               <h3 className="font-semibold text-yellow-800 mb-2">故障排除提示</h3>
               <ul className="list-disc pl-5 space-y-1">
-                <li>如果您看到"无内容生成"的问题，请检查上方显示的原始 API 响应格式</li>
+                <li>如果您看到&ldquo;无内容生成&rdquo;的问题，请检查上方显示的原始 API 响应格式</li>
                 <li>确保您的 API 密钥格式正确（以 xai- 开头）</li>
                 <li>查看浏览器控制台以获取更多调试信息</li>
                 <li>成功测试后，可以使用相同配置在写作助手中使用 Grok API</li>

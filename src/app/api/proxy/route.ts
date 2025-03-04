@@ -38,7 +38,7 @@ export async function POST(request: NextRequest) {
       try {
         data = JSON.parse(text);
         console.log('代理响应JSON结构:', Object.keys(data));
-      } catch (jsonError) {
+      } catch {
         console.error('解析JSON失败, 返回原始文本');
         // 如果不是有效的JSON，则返回原始文本
         return NextResponse.json({ text });
