@@ -1,3 +1,10 @@
+/**
+ * AI 写作助手 - Markdown 编辑器组件
+ * 
+ * @license MIT
+ * Copyright (c) 2024
+ */
+
 "use client";
 
 import React, { useState, useEffect } from 'react';

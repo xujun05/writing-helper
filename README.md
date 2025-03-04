@@ -126,9 +126,21 @@ npm run dev
 - [ ] 支持协作写作
 - [ ] 提供风格模板库
 
-## 📄 许可
+## 📄 许可证
 
-MIT
+本项目采用 [MIT 许可证](./LICENSE)。
+
+```
+MIT License
+
+Copyright (c) 2024
+
+Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to deal
+in the Software without restriction...
+```
+
+完整许可证文本请查看 [LICENSE](./LICENSE) 文件。
 
 ## 📧 联系方式
 
