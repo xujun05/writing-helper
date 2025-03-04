@@ -8,19 +8,19 @@ import MarkdownEditor from './MarkdownEditor';
 
 // Default prompt style template
 const defaultPromptStyle: PromptStyle = {
-  "style_summary": "平实细腻的散文笔触，以野菜为线索串联起乡愁记忆与人文关怀",
+  "style_summary": "质朴平实的散文笔触，以赶海为线索串联起乡愁记忆与人文关怀",
   "language": {
-    "sentence_pattern": ["短句与长句交错", "平叙为主,偶有感叹"],
+    "sentence_pattern": ["散文化的笔触，文字自然不造作", "营造场景叙事引人入胜"],
     "word_choice": {
       "formality_level": 3,
-      "preferred_words": ["我们那里", "家乡", "小时候"],
+      "preferred_words": [ "家乡", "小时候"],
       "avoided_words": ["华丽辞藻", "生僻字"]
     },
     "rhetoric": ["回忆式叙述", "细节描写", "对比手法"]
   },
   "structure": {
     "paragraph_length": "中等偏长，200-300字",
-    "transition_style": "以野菜品类自然过渡",
+    "transition_style": "以赶海的记忆和时光流逝进行过渡，今夕对比",
     "hierarchy_pattern": "以时空为经,以物为纬"
   },
   "narrative": {
@@ -40,11 +40,11 @@ const defaultPromptStyle: PromptStyle = {
   },
   "uniqueness": {
     "signature_phrases": ["我们那里", "小时候"],
-    "imagery_system": ["野菜", "乡土", "童年"]
+    "imagery_system": ["赶海", "渔村", "童年"]
   },
   "cultural": {
-    "allusions": ["典故适度", "民俗频现"],
-    "knowledge_domains": ["饮食文化", "乡土文化", "历史文献"]
+    "allusions": ["典故适度", "穿插回忆"],
+    "knowledge_domains": ["饮食文化", "赶海经历", "乡愁文学"]
   },
   "rhythm": {
     "syllable_pattern": "自然流畅",
@@ -71,8 +71,8 @@ const API_HELP = {
 
 export default function WritingAssistant() {
   const [promptStyle, setPromptStyle] = useState<PromptStyle>(defaultPromptStyle);
-  const [topic, setTopic] = useState<string>('童年的美食');
-  const [keywords, setKeywords] = useState<string>('黔东南、山野、乡村、贫瘠、温暖、质朴');
+  const [topic, setTopic] = useState<string>('儿时赶海');
+  const [keywords, setKeywords] = useState<string>('浙江海边、小时候、渔村、温暖、质朴');
   const [wordCount, setWordCount] = useState<number>(800);
   
   // API 设置

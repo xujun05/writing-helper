@@ -44,6 +44,9 @@ npm run dev
 
 然后在浏览器中访问 [http://localhost:3000](http://localhost:3000)。
 
+### 预览
+[preview](./preview/preview.png)
+
 ## 📝 使用方法
 
 1. **API 设置**：
