@@ -60,6 +60,12 @@ export default function GrokTest() {
       
       if (!proxyResponse.ok) {
         const errorData = await proxyResponse.json().catch(() => ({ error: { message: `代理服务错误: ${proxyResponse.status}` } }));
+        
+        // 处理超时错误
+        if (proxyResponse.status === 504) {
+          throw new Error('请求超时，请稍后重试。如果问题持续存在，请检查网络连接或联系支持。');
+        }
+        
         throw new Error(errorData.error?.message || `代理服务错误: ${proxyResponse.status}: ${proxyResponse.statusText}`);
       }
       

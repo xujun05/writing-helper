@@ -1,5 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server';
 
+// 设置最大执行时间为 60 秒
+export const maxDuration = 60;
+
 export async function POST(request: NextRequest) {
   try {
     // 从请求体中获取目标 API 信息
@@ -17,14 +20,20 @@ export async function POST(request: NextRequest) {
     console.log('代理请求体:', JSON.stringify(body, null, 2));
 
     try {
-      // 发起请求到目标 API
+      // 发起请求到目标 API，添加超时设置
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
+
       const response = await fetch(targetUrl, {
         method: 'POST',
         headers: headers || {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(body),
+        signal: controller.signal,
       });
+
+      clearTimeout(timeoutId);
 
       console.log('代理请求状态:', response.status, response.statusText);
       console.log('代理响应头:', JSON.stringify(Object.fromEntries([...response.headers.entries()]), null, 2));
@@ -49,6 +58,15 @@ export async function POST(request: NextRequest) {
     } catch (fetchError) {
       console.error('代理请求失败:', fetchError);
       
+      // 处理超时错误
+      if (fetchError instanceof Error && fetchError.name === 'AbortError') {
+        return NextResponse.json(
+          { error: { message: '请求超时，请稍后重试' } },
+          { status: 504 }
+        );
+      }
+
+      // 处理其他错误
       return NextResponse.json(
         { 
           error: { 
