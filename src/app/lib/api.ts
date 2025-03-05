@@ -11,11 +11,21 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
     
     // Detect API provider type from URL (simple detection)
     const isGrokApi = llmApiUrl.includes('grok') || llmApiUrl.includes('xai');
+    const isOllamaApi = llmApiUrl.includes('ollama') || llmApiUrl.includes('11434');
     
     // Prepare request body based on API provider
     let requestBody: Record<string, unknown>;
+    let isOllama = false;
     
-    if (isGrokApi) {
+    if (isOllamaApi) {
+      // Ollama API format
+      requestBody = {
+        model: model || 'llama2',
+        prompt: promptTemplate,
+        stream: false
+      };
+      isOllama = true;
+    } else if (isGrokApi) {
       // Grok API format
       requestBody = {
         messages: [
@@ -24,14 +34,14 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
             content: promptTemplate
           }
         ],
-        model: "grok-2-latest", // 使用Grok模型而不是用户输入的模型
+        model: "grok-2-latest",
         temperature: 0.7,
         stream: false
       };
     } else {
       // OpenAI-compatible API format (default)
       requestBody = {
-        model: model || 'gpt-4', // 使用用户选择的模型，或默认为gpt-4
+        model: model || 'gpt-4',
         messages: [
           {
             role: 'user',
@@ -47,10 +57,8 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
       'Content-Type': 'application/json',
     };
     
-    // Add appropriate authorization header
-    if (isGrokApi) {
-      headers['Authorization'] = `Bearer ${llmApiKey}`; // 确保Grok API也使用Bearer格式
-    } else {
+    // Add appropriate authorization header if not Ollama
+    if (!isOllamaApi) {
       headers['Authorization'] = `Bearer ${llmApiKey}`;
     }
 
@@ -69,7 +77,8 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
         body: JSON.stringify({
           targetUrl: llmApiUrl,
           headers,
-          body: requestBody
+          body: requestBody,
+          isOllama
         })
       });
       

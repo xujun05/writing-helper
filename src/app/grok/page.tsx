@@ -4,120 +4,204 @@ import React, { useState } from 'react';
 import Link from 'next/link';
 
 export default function GrokTest() {
-  const [apiKey, setApiKey] = useState<string>('');
+  const [apiKey, setApiKey] = useState('');
+  const [apiEndpoint, setApiEndpoint] = useState('https://api.x.ai/v1/chat/completions');
+  const [isOllama, setIsOllama] = useState(false);
+  const [ollamaEndpoint, setOllamaEndpoint] = useState('http://localhost:11434/api/generate');
+  const [ollamaModel, setOllamaModel] = useState('llama2');
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [topic, setTopic] = useState('');
+  const [keywords, setKeywords] = useState('');
+  const [wordCount, setWordCount] = useState('1000');
+  const [style, setStyle] = useState({
+    role: '写作助手',
+    expertise: ['写作', '内容创作'],
+    writingStyle: ['清晰', '专业'],
+    tone: '正式',
+    structure: ['段落分明', '逻辑清晰'],
+    requirements: ['原创', '高质量']
+  });
   const [prompt, setPrompt] = useState<string>('Testing. Just say hi and hello world and nothing else.');
   const [response, setResponse] = useState<string>('');
   const [rawResponse, setRawResponse] = useState<string>('');
-  const [isLoading, setIsLoading] = useState<boolean>(false);
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [result, setResult] = useState<string | null>(null);
+
+  // 获取可用的 Ollama 模型
+  const fetchOllamaModels = async () => {
+    try {
+      const response = await fetch('http://localhost:11434/api/tags');
+      if (!response.ok) {
+        throw new Error('无法获取模型列表');
+      }
+      const data = await response.json();
+      if (data.models) {
+        setAvailableModels(data.models);
+        if (data.models.length > 0 && !data.models.includes(ollamaModel)) {
+          setOllamaModel(data.models[0]);
+        }
+      }
+    } catch (error) {
+      console.error('获取模型列表失败:', error);
+      setError('无法获取 Ollama 模型列表，请确保 Ollama 服务正在运行');
+    }
+  };
+
+  // 当切换到 Ollama 时获取模型列表
+  React.useEffect(() => {
+    if (isOllama) {
+      fetchOllamaModels();
+    }
+  }, [isOllama]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsLoading(true);
+    setLoading(true);
     setError(null);
     setResponse('');
     setRawResponse('');
 
     try {
-      // 准备请求体
+      // 检查 Ollama 服务是否可用
+      if (isOllama) {
+        try {
+          const checkResponse = await fetch(ollamaEndpoint.replace('/api/generate', '/api/tags'));
+          if (!checkResponse.ok) {
+            throw new Error('无法连接到 Ollama 服务，请确保：\n1. Ollama 已安装并运行\n2. 服务地址正确（默认：http://localhost:11434）\n3. 没有防火墙阻止连接');
+          }
+        } catch (error) {
+          throw new Error('无法连接到 Ollama 服务，请确保：\n1. Ollama 已安装并运行\n2. 服务地址正确（默认：http://localhost:11434）\n3. 没有防火墙阻止连接');
+        }
+      }
+
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+
+      // 如果不是 Ollama，添加 API Key
+      if (!isOllama && apiKey) {
+        headers['Authorization'] = `Bearer ${apiKey}`;
+      }
+
       const requestBody = {
+        model: isOllama ? ollamaModel : 'grok-1',
         messages: [
           {
-            role: "system",
-            content: "You are a test assistant."
+            role: 'system',
+            content: `你是一个专业的${style.role}，擅长${style.expertise.join('、')}。你的写作风格是${style.writingStyle.join('、')}。`
           },
           {
-            role: "user",
-            content: prompt
+            role: 'user',
+            content: prompt || `请根据以下要求生成内容：
+主题：${topic}
+关键词：${keywords}
+字数要求：${wordCount}字
+写作风格：${style.writingStyle.join('、')}
+专业领域：${style.expertise.join('、')}
+角色定位：${style.role}
+语气：${style.tone}
+结构要求：${style.structure.join('、')}
+特殊要求：${style.requirements.join('、')}`
           }
         ],
-        model: "grok-2-latest",
-        stream: false,
-        temperature: 0
+        temperature: 0.7,
+        max_tokens: 2000,
       };
 
-      // 准备请求头
-      const headers = {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${apiKey}`
-      };
+      // 添加重试逻辑
+      let retries = 3;
+      let lastError = null;
 
-      // 使用代理发送请求（避免CORS问题）
-      console.log('通过代理发起请求...');
-      console.log('请求体:', JSON.stringify(requestBody, null, 2));
-      
-      const proxyResponse = await fetch('/api/proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          targetUrl: 'https://api.x.ai/v1/chat/completions',
-          headers: headers,
-          body: requestBody
-        })
-      });
-      
-      if (!proxyResponse.ok) {
-        const errorData = await proxyResponse.json().catch(() => ({ error: { message: `代理服务错误: ${proxyResponse.status}` } }));
-        
-        // 处理超时错误
-        if (proxyResponse.status === 504) {
-          throw new Error('请求超时，请稍后重试。如果问题持续存在，请检查网络连接或联系支持。');
+      while (retries > 0) {
+        try {
+          const proxyResponse = await fetch('/api/proxy', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              targetUrl: isOllama ? ollamaEndpoint : apiEndpoint,
+              headers: headers,
+              body: requestBody,
+              isOllama: isOllama
+            })
+          });
+          
+          if (!proxyResponse.ok) {
+            const errorData = await proxyResponse.json().catch(() => ({ error: { message: `代理服务错误: ${proxyResponse.status}` } }));
+            
+            // 处理超时错误
+            if (proxyResponse.status === 504) {
+              throw new Error('请求超时，请稍后重试。如果问题持续存在，请检查网络连接或联系支持。');
+            }
+            
+            throw new Error(errorData.error?.message || `代理服务错误: ${proxyResponse.status}: ${proxyResponse.statusText}`);
+          }
+          
+          const data = await proxyResponse.json();
+          console.log('代理 API 响应:', data);
+          
+          // 保存原始响应用于调试
+          setRawResponse(JSON.stringify(data, null, 2));
+          
+          // 尝试不同的方式解析响应内容
+          let content = '';
+          
+          if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
+            // 标准格式
+            content = data.choices[0].message.content;
+            console.log('从 choices[0].message.content 提取内容');
+          } else if (data.message && data.message.content) {
+            // 替代格式1
+            content = data.message.content;
+            console.log('从 message.content 提取内容');
+          } else if (data.content) {
+            // 替代格式2
+            content = data.content;
+            console.log('从 content 提取内容');
+          } else if (data.output) {
+            // 替代格式3
+            content = data.output;
+            console.log('从 output 提取内容');
+          } else if (data.response) {
+            // 替代格式4
+            content = data.response;
+            console.log('从 response 提取内容');
+          } else if (data.text) {
+            // 替代格式5
+            content = data.text;
+            console.log('从 text 提取内容');
+          } else if (typeof data === 'string') {
+            // 可能整个响应就是文本
+            content = data;
+            console.log('响应本身是字符串');
+          } else {
+            // 无法识别的格式，显示整个响应
+            content = "无法从响应中提取内容。请查看原始响应。";
+            console.log('无法识别的响应格式');
+          }
+          
+          setResponse(content);
+          break; // 成功则退出重试循环
+        } catch (error) {
+          lastError = error;
+          retries--;
+          if (retries > 0) {
+            console.log(`请求失败，剩余重试次数: ${retries}`);
+            await new Promise(resolve => setTimeout(resolve, 1000)); // 等待1秒后重试
+          }
         }
-        
-        throw new Error(errorData.error?.message || `代理服务错误: ${proxyResponse.status}: ${proxyResponse.statusText}`);
       }
-      
-      const data = await proxyResponse.json();
-      console.log('代理 API 响应:', data);
-      
-      // 保存原始响应用于调试
-      setRawResponse(JSON.stringify(data, null, 2));
-      
-      // 尝试不同的方式解析响应内容
-      let content = '';
-      
-      if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
-        // 标准格式
-        content = data.choices[0].message.content;
-        console.log('从 choices[0].message.content 提取内容');
-      } else if (data.message && data.message.content) {
-        // 替代格式1
-        content = data.message.content;
-        console.log('从 message.content 提取内容');
-      } else if (data.content) {
-        // 替代格式2
-        content = data.content;
-        console.log('从 content 提取内容');
-      } else if (data.output) {
-        // 替代格式3
-        content = data.output;
-        console.log('从 output 提取内容');
-      } else if (data.response) {
-        // 替代格式4
-        content = data.response;
-        console.log('从 response 提取内容');
-      } else if (data.text) {
-        // 替代格式5
-        content = data.text;
-        console.log('从 text 提取内容');
-      } else if (typeof data === 'string') {
-        // 可能整个响应就是文本
-        content = data;
-        console.log('响应本身是字符串');
-      } else {
-        // 无法识别的格式，显示整个响应
-        content = "无法从响应中提取内容。请查看原始响应。";
-        console.log('无法识别的响应格式');
+
+      if (retries === 0 && lastError) {
+        throw lastError;
       }
-      
-      setResponse(content);
     } catch (error) {
       console.error('请求错误:', error);
       setError(error instanceof Error ? error.message : '未知错误');
     } finally {
-      setIsLoading(false);
+      setLoading(false);
     }
   };
 
@@ -148,20 +232,125 @@ export default function GrokTest() {
           </p>
           
           <form onSubmit={handleSubmit} className="mb-6 space-y-4">
-            <div>
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Grok API 密钥
-                <span className="ml-1 text-xs text-gray-500">(格式为 xai-开头)</span>
-              </label>
+            <div className="flex items-center space-x-2">
               <input
-                type="password"
-                value={apiKey}
-                onChange={(e) => setApiKey(e.target.value)}
-                className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                placeholder="xai-..."
-                required
+                type="checkbox"
+                id="useOllama"
+                checked={isOllama}
+                onChange={(e) => setIsOllama(e.target.checked)}
+                className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
               />
+              <label htmlFor="useOllama" className="text-sm font-medium text-gray-700">
+                使用 Ollama
+              </label>
             </div>
+
+            {isOllama ? (
+              <>
+                <div>
+                  <label htmlFor="ollamaEndpoint" className="block text-sm font-medium text-gray-700">
+                    Ollama 端点
+                  </label>
+                  <input
+                    type="text"
+                    id="ollamaEndpoint"
+                    value={ollamaEndpoint}
+                    onChange={(e) => setOllamaEndpoint(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="http://localhost:11434/api/generate"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="ollamaModel" className="block text-sm font-medium text-gray-700">
+                    Ollama 模型
+                  </label>
+                  <select
+                    id="ollamaModel"
+                    value={ollamaModel}
+                    onChange={(e) => setOllamaModel(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                  >
+                    {availableModels.length > 0 ? (
+                      availableModels.map((model) => (
+                        <option key={model} value={model}>
+                          {model}
+                        </option>
+                      ))
+                    ) : (
+                      <option value="llama2">llama2</option>
+                    )}
+                  </select>
+                </div>
+                <div>
+                  <label htmlFor="topic" className="block text-sm font-medium text-gray-700">
+                    主题
+                  </label>
+                  <input
+                    type="text"
+                    id="topic"
+                    value={topic}
+                    onChange={(e) => setTopic(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="输入文章主题"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="keywords" className="block text-sm font-medium text-gray-700">
+                    关键词
+                  </label>
+                  <input
+                    type="text"
+                    id="keywords"
+                    value={keywords}
+                    onChange={(e) => setKeywords(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="输入关键词，用逗号分隔"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="wordCount" className="block text-sm font-medium text-gray-700">
+                    字数
+                  </label>
+                  <input
+                    type="number"
+                    id="wordCount"
+                    value={wordCount}
+                    onChange={(e) => setWordCount(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="输入目标字数"
+                  />
+                </div>
+              </>
+            ) : (
+              <>
+                <div>
+                  <label htmlFor="apiKey" className="block text-sm font-medium text-gray-700">
+                    API Key
+                  </label>
+                  <input
+                    type="password"
+                    id="apiKey"
+                    value={apiKey}
+                    onChange={(e) => setApiKey(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="输入您的 API Key"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="apiEndpoint" className="block text-sm font-medium text-gray-700">
+                    API 端点
+                  </label>
+                  <input
+                    type="text"
+                    id="apiEndpoint"
+                    value={apiEndpoint}
+                    onChange={(e) => setApiEndpoint(e.target.value)}
+                    className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm"
+                    placeholder="https://api.x.ai/v1/chat/completions"
+                  />
+                </div>
+              </>
+            )}
             
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-1">提示词</label>
@@ -169,17 +358,20 @@ export default function GrokTest() {
                 value={prompt}
                 onChange={(e) => setPrompt(e.target.value)}
                 className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 h-32"
-                required
+                placeholder={`请根据以下要求生成内容：
+主题：${topic}
+关键词：${keywords}
+字数要求：${wordCount}字`}
               />
             </div>
             
             <div>
               <button
                 type="submit"
-                disabled={isLoading}
+                disabled={loading}
                 className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2 px-6 rounded-md font-medium disabled:opacity-60 disabled:from-gray-400 disabled:to-gray-500 transition duration-150 ease-in-out shadow-md w-full sm:w-auto"
               >
-                {isLoading ? (
+                {loading ? (
                   <span className="flex items-center justify-center">
                     <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
                       <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
@@ -190,7 +382,7 @@ export default function GrokTest() {
                 ) : (
                   <span className="flex items-center justify-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-8.707l-3-3a1 1 0 00-1.414 0l-3 3a1 1 0 001.414 1.414L9 9.414V13a1 1 0 102 0V9.414l1.293 1.293a1 1 0 001.414-1.414z" clipRule="evenodd" />
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
                     </svg>
                     发送请求
                   </span>

@@ -54,18 +54,20 @@ const defaultPromptStyle: PromptStyle = {
 };
 
 // API Provider 选项
-type ApiProvider = 'openai' | 'grok' | 'custom';
+type ApiProvider = 'openai' | 'grok' | 'ollama' | 'custom';
 
 // 默认 API URLs
 const API_URLS = {
   openai: 'https://api.openai.com/v1/chat/completions',
-  grok: 'https://api.x.ai/v1/chat/completions' // 更正为真实的 Grok API 端点
+  grok: 'https://api.x.ai/v1/chat/completions',
+  ollama: 'http://localhost:11434/api/generate'
 };
 
 // 帮助信息
 const API_HELP = {
   openai: '输入您的 OpenAI API 密钥。格式通常为 "sk-" 开头的字符串。',
   grok: '输入您的 Grok API 密钥。格式通常为 "xai-" 开头的字符串。',
+  ollama: '使用本地 Ollama 服务时无需 API 密钥。请确保 Ollama 服务已启动。',
   custom: '请输入完整的 API URL 和相应的认证信息。'
 };
 
@@ -102,7 +104,11 @@ export default function WritingAssistant() {
     // 根据提供商设置默认模型
     if (provider === 'grok') {
       setModel('grok-2-latest');
-    } else {
+    } else if (provider === 'ollama') {
+      setModel('llama2');
+      // 清空 API Key，因为 Ollama 不需要
+      setLlmApiKey('');
+    } else if (provider === 'openai') {
       setModel('gpt-4');
     }
     
@@ -245,6 +251,7 @@ export default function WritingAssistant() {
                         >
                           <option value="openai">OpenAI API</option>
                           <option value="grok">Grok API (X.AI)</option>
+                          <option value="ollama">Ollama (本地)</option>
                           <option value="custom">自定义 API</option>
                         </select>
                       </div>
@@ -297,6 +304,7 @@ export default function WritingAssistant() {
                         <p className="text-xs text-gray-500 mt-1">
                           {apiProvider === 'grok' ? 'Grok API 模型，例如: grok-2-latest' : 
                           apiProvider === 'openai' ? 'OpenAI 模型，例如: gpt-4, gpt-3.5-turbo' : 
+                          apiProvider === 'ollama' ? 'Ollama 模型，例如: gpt-4' : 
                           '请输入您要使用的模型名称'}
                         </p>
                       </div>
