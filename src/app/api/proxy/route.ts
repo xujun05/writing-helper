@@ -74,6 +74,7 @@ export async function POST(request: NextRequest) {
         method: 'POST',
         headers: {
           'Content-Type': 'application/json',
+          ...(isOllama ? {} : headers), // 非 Ollama 请求时添加原始请求头
         },
         body: JSON.stringify(requestBody),
         signal: controller.signal,
