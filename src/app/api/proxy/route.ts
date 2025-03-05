@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     try {
       // 发起请求到目标 API，添加超时设置
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 30000); // 30秒超时
+      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5分钟超时
 
       // 根据是否是 Ollama 请求调整请求体格式
       const requestBody = isOllama ? {
@@ -82,53 +82,41 @@ export async function POST(request: NextRequest) {
 
       clearTimeout(timeoutId);
 
-      console.log('代理请求状态:', response.status, response.statusText);
-      console.log('代理响应头:', JSON.stringify(Object.fromEntries([...response.headers.entries()]), null, 2));
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error('代理请求响应错误:', response.status, errorText);
+        throw new Error(`服务器返回错误：${response.status} ${errorText}`);
+      }
 
-      // 尝试解析响应数据
-      const text = await response.text();
-      console.log('代理响应原始文本:', text);
-
-      // 尝试将文本解析为JSON
-      let data;
-      try {
-        data = JSON.parse(text);
+      // 处理 Ollama 响应格式
+      if (isOllama) {
+        const ollamaResponse = await response.json();
+        console.log('Ollama 原始响应:', JSON.stringify(ollamaResponse));
         
-        // 如果是 Ollama 响应，转换为 OpenAI 兼容格式
-        if (isOllama && data.response) {
-          data = {
-            choices: [{
-              message: {
-                content: data.response,
-                role: 'assistant'
-              },
-              finish_reason: 'stop'
-            }]
-          };
-        }
-        
-        console.log('代理响应JSON结构:', Object.keys(data));
-      } catch (parseError) {
-        console.error('解析JSON失败:', parseError);
-        console.error('原始文本:', text);
-        // 如果不是有效的JSON，则返回原始文本
-        return NextResponse.json({ text }, {
-          headers: {
-            'Access-Control-Allow-Origin': '*',
-            'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-            'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        // 构造与 OpenAI 格式兼容的响应
+        return NextResponse.json({
+          id: 'ollama-' + Date.now(),
+          object: 'chat.completion',
+          created: Math.floor(Date.now() / 1000),
+          model: body.model || 'llama2',
+          choices: [{
+            index: 0,
+            message: {
+              role: 'assistant',
+              content: ollamaResponse.response || '无内容生成'
+            },
+            finish_reason: ollamaResponse.done_reason || 'stop'
+          }],
+          usage: {
+            prompt_tokens: ollamaResponse.prompt_eval_count || 0,
+            completion_tokens: ollamaResponse.eval_count || 0,
+            total_tokens: (ollamaResponse.prompt_eval_count || 0) + (ollamaResponse.eval_count || 0)
           }
         });
       }
 
-      // 返回解析后的JSON响应
-      return NextResponse.json(data, {
-        headers: {
-          'Access-Control-Allow-Origin': '*',
-          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
-          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
-        }
-      });
+      // 非 Ollama 响应直接传递
+      return response;
     } catch (fetchError) {
       console.error('代理请求失败:', fetchError);
       
