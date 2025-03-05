@@ -93,6 +93,55 @@ export async function POST(request: NextRequest) {
         const ollamaResponse = await response.json();
         console.log('Ollama 原始响应:', JSON.stringify(ollamaResponse));
         
+        // 提取实际文本内容 - Ollama可能返回JSON字符串作为响应
+        let content = ollamaResponse.response || '无内容生成';
+        
+        // 尝试解析JSON响应中的内容
+        try {
+          // 检查是否是JSON字符串
+          if (typeof content === 'string' && content.trim().startsWith('{')) {
+            const parsedContent = JSON.parse(content);
+            
+            // 提取不同可能的内容结构
+            if (parsedContent.article && parsedContent.article.content) {
+              // 处理文章格式 {"article": {"title": "...", "content": ["...", "..."]}}
+              if (Array.isArray(parsedContent.article.content)) {
+                content = parsedContent.article.content.join('\n\n');
+              } else {
+                content = parsedContent.article.content.toString();
+              }
+            } else if (parsedContent.content) {
+              // 处理直接内容格式 {"content": "..."}
+              if (Array.isArray(parsedContent.content)) {
+                content = parsedContent.content.join('\n\n');
+              } else {
+                content = parsedContent.content.toString();
+              }
+            } else if (parsedContent.text) {
+              // 处理text格式 {"text": "..."}
+              content = parsedContent.text.toString();
+            } else if (parsedContent.title && typeof parsedContent.title === 'string') {
+              // 只有标题的情况
+              content = `# ${parsedContent.title}`;
+              if (parsedContent.content) {
+                content += `\n\n${Array.isArray(parsedContent.content) ? parsedContent.content.join('\n\n') : parsedContent.content.toString()}`;
+              }
+            }
+          }
+
+          // 去除内容中的Markdown标记，简化为纯文本
+          content = content.replace(/[#*`_~]/g, '');
+          
+          // 确保content是字符串类型
+          if (typeof content !== 'string') {
+            content = String(content);
+          }
+        } catch (e) {
+          console.log('解析Ollama响应内容失败，使用原始响应:', e);
+          // 保持原始响应，但确保是字符串
+          content = String(ollamaResponse.response || '无内容生成');
+        }
+        
         // 构造与 OpenAI 格式兼容的响应
         return NextResponse.json({
           id: 'ollama-' + Date.now(),
@@ -103,7 +152,7 @@ export async function POST(request: NextRequest) {
             index: 0,
             message: {
               role: 'assistant',
-              content: ollamaResponse.response || '无内容生成'
+              content: content // 确保是字符串
             },
             finish_reason: ollamaResponse.done_reason || 'stop'
           }],
@@ -115,8 +164,15 @@ export async function POST(request: NextRequest) {
         });
       }
 
-      // 非 Ollama 响应直接传递
-      return response;
+      // 非 Ollama 响应需要先解析然后重新包装
+      const responseData = await response.json();
+      return NextResponse.json(responseData, {
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+          'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+        }
+      });
     } catch (fetchError) {
       console.error('代理请求失败:', fetchError);
       

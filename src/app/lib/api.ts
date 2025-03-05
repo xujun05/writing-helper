@@ -162,7 +162,7 @@ export function formatPromptTemplate(
   return `${styleJson}
 
 ---
-遵循以上风格为我编写一篇${wordCount}字的文章，主题是${topic}。
+遵循以上风格为我编写一篇${wordCount}字的文章，主题是${topic}，输出格式为markdown。
 关键词：${keywordsStr}`;
 }
 
