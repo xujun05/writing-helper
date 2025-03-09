@@ -481,7 +481,9 @@ export default function GrokTest() {
         <div className="text-center mt-6 text-gray-600 text-sm">
           <p>
             <Link href="/" className="text-blue-600 hover:underline">返回写作助手</Link> • 
-  
+            Grok API 测试工具 • 
+            <a href="/polish" className="text-blue-600 hover:underline">文章润色</a> •
+            <a href="https://x.ai" target="_blank" rel="noopener noreferrer" className="text-blue-600 hover:underline">X.AI</a>
           </p>
           
           <div className="mt-4 flex justify-center space-x-4">

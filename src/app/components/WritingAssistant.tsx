@@ -5,6 +5,8 @@ import { PromptStyle, WritingRequest } from '../lib/types';
 import { generateContent, exportToMarkdown } from '../lib/api';
 import PromptForm from './PromptForm';
 import MarkdownEditor from './MarkdownEditor';
+import ArticlePolisher from './ArticlePolisher';
+import ApiSettings, { ApiProvider } from './ApiSettings';
 
 // Default prompt style template
 const defaultPromptStyle: PromptStyle = {
@@ -53,28 +55,33 @@ const defaultPromptStyle: PromptStyle = {
   }
 };
 
-// API Provider 选项
-type ApiProvider = 'openai' | 'grok' | 'ollama' | 'custom';
+// API 提供商选项
+// type ApiProvider = 'openai' | 'grok' | 'ollama' | 'custom';
+
+// 标签类型
+type TabType = 'writing' | 'polish';
 
 // 默认 API URLs
 const API_URLS = {
   openai: 'https://api.openai.com/v1/chat/completions',
   grok: 'https://api.x.ai/v1/chat/completions',
-  ollama: 'http://localhost:11434/api/generate'
+  ollama: 'http://localhost:11434/api/generate',
+  custom: ''
 };
 
-// 帮助信息
+// API 提供商帮助信息
 const API_HELP = {
-  openai: '输入您的 OpenAI API 密钥。格式通常为 "sk-" 开头的字符串。',
-  grok: '输入您的 Grok API 密钥。格式通常为 "xai-" 开头的字符串。',
-  ollama: '使用本地 Ollama 服务时无需 API 密钥。请确保 Ollama 服务已启动。',
-  custom: '请输入完整的 API URL 和相应的认证信息。'
+  openai: '使用 OpenAI API，例如 GPT-4',
+  grok: '使用 Grok API (X.AI)',
+  ollama: '使用本地运行的 Ollama 服务',
+  custom: '配置自定义 API 端点'
 };
 
 export default function WritingAssistant() {
   const [promptStyle, setPromptStyle] = useState<PromptStyle>(defaultPromptStyle);
   const [topic, setTopic] = useState<string>('儿时赶海');
   const [keywords, setKeywords] = useState<string>('浙江海边、小时候、渔村、温暖、质朴');
+  const [keywordInput, setKeywordInput] = useState<string>('');
   const [wordCount, setWordCount] = useState<number>(800);
   
   // API 设置
@@ -89,7 +96,62 @@ export default function WritingAssistant() {
   const [apiResponseDetails, setApiResponseDetails] = useState<string | null>(null);
   const [showPromptEditor, setShowPromptEditor] = useState<boolean>(false);
   const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false);
-  const [showApiSettings, setShowApiSettings] = useState<boolean>(false);
+  const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
+
+  // 添加 Ollama 模型列表状态
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+
+  // 添加当前标签状态
+  const [activeTab, setActiveTab] = useState<TabType>('writing');
+
+  // 获取可用的 Ollama 模型
+  const fetchOllamaModels = async () => {
+    try {
+      setError(null); // 清除之前的错误
+      
+      // 检查 Ollama 服务是否可用
+      const response = await fetch('http://localhost:11434/api/tags', {
+        // 添加超时设置以避免长时间等待
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`无法获取模型列表: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      if (data.models && Array.isArray(data.models)) {
+        // 确保返回的模型列表是一个数组
+        const models = data.models.filter((model: unknown) => typeof model === 'string') as string[];
+        setAvailableModels(models);
+        
+        // 如果当前模型不在列表中且列表不为空，则选择第一个模型
+        if (models.length > 0 && !models.includes(model)) {
+          setModel(models[0]);
+        }
+      } else {
+        // 如果返回的数据格式不符合预期，使用空数组
+        setAvailableModels([]);
+        // 保持默认模型名称 'llama2'
+      }
+      return data.models; // 返回获取到的模型列表
+    } catch (error) {
+      console.error('获取模型列表失败:', error);
+      setAvailableModels([]); // 清空模型列表，使用默认值
+      setError('无法获取 Ollama 模型列表，请确保 Ollama 服务正在运行');
+      throw error; // 向上抛出错误，以便调用方处理
+    }
+  };
+
+  // 为添加按钮新增单独的处理函数
+  const handleAddKeyword = () => {
+    if (keywordInput.trim()) {
+      // 更新关键词列表
+      const newKeywords = keywordInput.trim();
+      setKeywords(keywords ? `${keywords}、${newKeywords}` : newKeywords);
+      setKeywordInput(''); // 清空输入框
+    }
+  };
 
   // 当 API 提供商变化时更新 URL 和模型
   const handleApiProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
@@ -193,319 +255,325 @@ export default function WritingAssistant() {
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">AI 写作助手</h1>
           <p className="text-gray-600 max-w-2xl mx-auto">使用先进的人工智能模型，根据您的风格偏好生成高质量文章</p>
+          
+          {/* 添加标签页切换 */}
+          <div className="mt-6 flex justify-center border-b border-gray-200">
+            <button
+              onClick={() => setActiveTab('writing')}
+              className={`px-6 py-2 font-medium text-sm ${
+                activeTab === 'writing'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              AI 文章生成
+            </button>
+            <button
+              onClick={() => setActiveTab('polish')}
+              className={`px-6 py-2 font-medium text-sm ${
+                activeTab === 'polish'
+                  ? 'text-blue-600 border-b-2 border-blue-600'
+                  : 'text-gray-500 hover:text-gray-700'
+              }`}
+            >
+              文章润色
+            </button>
+          </div>
         </div>
-        
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
-          {/* Input Section */}
-          <div className="space-y-6">
-            <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
-              <h2 className="text-xl font-semibold mb-4 flex items-center text-gray-800">
-                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                  <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
-                </svg>
-                写作设置
-              </h2>
-              
-              <form onSubmit={handleSubmit} className="space-y-6">
-                {/* LLM API Settings */}
-                <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4">
-                  <div className="flex justify-between items-center cursor-pointer" onClick={toggleApiSettings}>
+
+        {activeTab === 'writing' ? (
+          // 原有的文章生成界面
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
+            {/* Input Section */}
+            <div className="space-y-6">
+              <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
+                <h2 className="text-xl font-semibold mb-4 flex items-center text-gray-800">
+                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                    <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />
+                  </svg>
+                  写作设置
+                </h2>
+                
+                <form onSubmit={handleSubmit} className="space-y-6">
+                  {/* LLM API Settings */}
+                  <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4">
+                    <div className="flex justify-between items-center cursor-pointer" onClick={toggleApiSettings}>
+                      <h3 className="font-medium text-gray-700 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1H4v8a1 1 0 001 1h10a1 1 0 001-1V6zM4 4a1 1 0 011-1h10a1 1 0 011 1v1H4V4z" clipRule="evenodd" />
+                        </svg>
+                        API 设置
+                      </h3>
+                      <div className="flex items-center space-x-2">
+                        <button
+                          type="button"
+                          className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-md transition duration-150 ease-in-out"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            toggleDebugInfo();
+                          }}
+                        >
+                          {showDebugInfo ? '隐藏调试信息' : '显示调试信息'}
+                        </button>
+                        <svg 
+                          xmlns="http://www.w3.org/2000/svg" 
+                          className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${showApiSettings ? 'transform rotate-180' : ''}`} 
+                          viewBox="0 0 20 20" 
+                          fill="currentColor"
+                        >
+                          <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
+                        </svg>
+                      </div>
+                    </div>
+
+                    {showApiSettings && (
+                      <ApiSettings 
+                        showSettings={true}
+                        toggleSettings={() => {}} // 这里已经控制显示了，所以传入空函数
+                        apiProvider={apiProvider}
+                        setApiProvider={(provider) => {
+                          setApiProvider(provider);
+                          // 当更改提供商时，直接更新URL（使用预定义的默认值）
+                          if (provider === 'openai') {
+                            setLlmApiUrl('https://api.openai.com/v1/chat/completions');
+                            setModel('gpt-4');
+                          } else if (provider === 'grok') {
+                            setLlmApiUrl('https://api.grok.ai/v1/chat/completions');
+                            setModel('grok-2-latest');
+                          } else if (provider === 'ollama') {
+                            setLlmApiUrl('http://localhost:11434/api/generate');
+                            setModel('llama2');
+                            // 清空 API Key，因为 Ollama 不需要
+                            setLlmApiKey('');
+                          }
+                          // 重置错误
+                          setError(null);
+                          setApiResponseDetails(null);
+                        }}
+                        apiUrl={llmApiUrl}
+                        setApiUrl={setLlmApiUrl}
+                        apiKey={llmApiKey}
+                        setApiKey={setLlmApiKey}
+                        model={model}
+                        setModel={setModel}
+                        availableModels={availableModels}
+                        fetchModels={fetchOllamaModels}
+                      />
+                    )}
+                  </div>
+
+                  {/* Content Settings */}
+                  <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4">
                     <h3 className="font-medium text-gray-700 flex items-center">
                       <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1H4v8a1 1 0 001 1h10a1 1 0 001-1V6zM4 4a1 1 0 011-1h10a1 1 0 011 1v1H4V4z" clipRule="evenodd" />
+                        <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                       </svg>
-                      API 设置
+                      内容设置
                     </h3>
-                    <div className="flex items-center space-x-2">
-                      <button
-                        type="button"
-                        className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-md transition duration-150 ease-in-out"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleDebugInfo();
-                        }}
-                      >
-                        {showDebugInfo ? '隐藏调试信息' : '显示调试信息'}
-                      </button>
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${showApiSettings ? 'transform rotate-180' : ''}`} 
-                        viewBox="0 0 20 20" 
-                        fill="currentColor"
-                      >
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
+                    
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        主题
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={topic}
+                        onChange={(e) => setTopic(e.target.value)}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        关键词（用、分隔）
+                      </label>
+                      <input
+                        type="text"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={keywords}
+                        onChange={handleKeywordsChange}
+                        required
+                      />
+                    </div>
+
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">
+                        字数
+                      </label>
+                      <input
+                        type="number"
+                        min="100"
+                        step="100"
+                        className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                        value={wordCount}
+                        onChange={(e) => setWordCount(Number(e.target.value))}
+                        required
+                      />
                     </div>
                   </div>
                   
-                  {showApiSettings && (
-                    <div className="space-y-4 pt-2 border-t border-gray-200 mt-2">
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          选择 API 提供商
-                        </label>
-                        <select
-                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white shadow-sm"
-                          value={apiProvider}
-                          onChange={handleApiProviderChange}
-                        >
-                          <option value="openai">OpenAI API</option>
-                          <option value="grok">Grok API (X.AI)</option>
-                          <option value="ollama">Ollama (本地)</option>
-                          <option value="custom">自定义 API</option>
-                        </select>
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          LLM API URL
-                        </label>
-                        <input
-                          type="text"
-                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          value={llmApiUrl}
-                          onChange={(e) => setLlmApiUrl(e.target.value)}
-                          required
-                        />
-                        {showDebugInfo && (
-                          <p className="text-xs text-gray-500 mt-1">
-                            当前 URL: {llmApiUrl}
-                          </p>
-                        )}
-                      </div>
-                      
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          API Key
-                        </label>
-                        <input
-                          type="password"
-                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          value={llmApiKey}
-                          onChange={(e) => setLlmApiKey(e.target.value)}
-                          required
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          {API_HELP[apiProvider]}
-                        </p>
-                      </div>
-
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">
-                          模型
-                        </label>
-                        <input
-                          type="text"
-                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                          value={model}
-                          onChange={(e) => setModel(e.target.value)}
-                          required
-                        />
-                        <p className="text-xs text-gray-500 mt-1">
-                          {apiProvider === 'grok' ? 'Grok API 模型，例如: grok-2-latest' : 
-                          apiProvider === 'openai' ? 'OpenAI 模型，例如: gpt-4, gpt-3.5-turbo' : 
-                          apiProvider === 'ollama' ? 'Ollama 模型，例如: gpt-4' : 
-                          '请输入您要使用的模型名称'}
-                        </p>
-                      </div>
+                  {/* Prompt Style Editor */}
+                  <div 
+                    className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4"
+                    onClick={(e) => e.stopPropagation()}
+                  >
+                    <div className="flex justify-between items-center">
+                      <h3 className="font-medium text-gray-700 flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                          <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
+                          <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
+                        </svg>
+                        提示词风格
+                      </h3>
+                      <button
+                        type="button"
+                        className="text-blue-600 hover:text-blue-800 text-sm font-medium transition duration-150 ease-in-out"
+                        onClick={(e) => {
+                          e.preventDefault(); // 阻止可能的表单提交
+                          e.stopPropagation(); // 阻止事件冒泡
+                          setShowPromptEditor(!showPromptEditor);
+                        }}
+                      >
+                        {showPromptEditor ? '收起编辑器' : '展开编辑器'}
+                      </button>
                     </div>
+
+                    {showPromptEditor && (
+                      <div onClick={(e) => e.stopPropagation()}>
+                        <PromptForm 
+                          initialStyle={promptStyle} 
+                          onStyleChange={setPromptStyle} 
+                        />
+                      </div>
+                    )}
+                  </div>
+                  
+                  <div className="flex space-x-4">
+                    <button
+                      type="submit"
+                      className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2 px-6 rounded-md font-medium disabled:opacity-60 disabled:from-gray-400 disabled:to-gray-500 transition duration-150 ease-in-out transform hover:scale-105 shadow-md"
+                      disabled={isLoading || !llmApiKey}
+                    >
+                      {isLoading ? (
+                        <span className="flex items-center">
+                          <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                          </svg>
+                          生成中...
+                        </span>
+                      ) : '生成内容'}
+                    </button>
+                    <a
+                      href="/grok"
+                      className="bg-transparent border border-gray-300 text-gray-700 hover:bg-gray-100 py-2 px-4 rounded-md font-medium transition duration-150 ease-in-out flex items-center"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z" clipRule="evenodd" />
+                      </svg>
+                      API 测试页面
+                    </a>
+                  </div>
+                </form>
+              </div>
+            </div>
+          
+            {/* Output Section */}
+            <div>
+              <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-200 h-full flex flex-col">
+                <div className="flex justify-between items-center mb-4">
+                  <h2 className="text-xl font-semibold text-gray-800 flex items-center">
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
+                      <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
+                    </svg>
+                    生成结果
+                  </h2>
+                  {output && (
+                    <button
+                      onClick={handleExport}
+                      className="bg-green-600 hover:bg-green-700 text-white py-1.5 px-4 rounded-md text-sm flex items-center transition duration-150 ease-in-out shadow-sm"
+                    >
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
+                      </svg>
+                      导出 Markdown
+                    </button>
                   )}
                 </div>
                 
-                {/* Content Settings */}
-                <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4">
-                  <h3 className="font-medium text-gray-700 flex items-center">
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
-                    </svg>
-                    内容设置
-                  </h3>
+                <div className="flex-grow">
+                  {error && (
+                    <div className="bg-red-50 text-red-700 p-4 rounded-md border border-red-200 mb-4">
+                      <div className="font-medium flex items-center">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
+                          <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
+                        </svg>
+                        错误: {error}
+                      </div>
+                      {apiResponseDetails && (
+                        <div className="mt-2 text-sm pl-7">{apiResponseDetails}</div>
+                      )}
+                    </div>
+                  )}
                   
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      主题
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      关键词（用、分隔）
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={keywords}
-                      onChange={handleKeywordsChange}
-                      required
-                    />
-                  </div>
-                  
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      字数
-                    </label>
-                    <input
-                      type="number"
-                      min="100"
-                      step="100"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={wordCount}
-                      onChange={(e) => setWordCount(Number(e.target.value))}
-                      required
-                    />
-                  </div>
-                </div>
-                
-                {/* Prompt Style Editor */}
-                <div 
-                  className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-medium text-gray-700 flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
-                        <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
-                      </svg>
-                      提示词风格
-                    </h3>
-                    <button
-                      type="button"
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium transition duration-150 ease-in-out"
-                      onClick={(e) => {
-                        e.preventDefault(); // 阻止可能的表单提交
-                        e.stopPropagation(); // 阻止事件冒泡
-                        setShowPromptEditor(!showPromptEditor);
-                      }}
-                    >
-                      {showPromptEditor ? '收起编辑器' : '展开编辑器'}
-                    </button>
-                  </div>
-                  
-                  {showPromptEditor && (
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <PromptForm 
-                        initialStyle={promptStyle} 
-                        onStyleChange={setPromptStyle} 
+                  {isLoading ? (
+                    <div className="flex justify-center items-center bg-gray-50 border border-gray-200 rounded-lg min-h-[400px]">
+                      <div className="text-center">
+                        <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
+                        <p className="text-gray-600 mb-2">正在生成内容，请稍候...</p>
+                        <p className="text-xs text-gray-500 max-w-xs mx-auto">这可能需要几秒到几分钟的时间，取决于 API 响应速度和内容长度</p>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="h-full rounded-lg">
+                      <MarkdownEditor 
+                        initialContent={output} 
+                        onContentChange={setOutput} 
                       />
                     </div>
                   )}
                 </div>
-                
-                <div className="flex space-x-4">
-                  <button
-                    type="submit"
-                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2 px-6 rounded-md font-medium disabled:opacity-60 disabled:from-gray-400 disabled:to-gray-500 transition duration-150 ease-in-out transform hover:scale-105 shadow-md"
-                    disabled={isLoading || !llmApiKey}
-                  >
-                    {isLoading ? (
-                      <span className="flex items-center">
-                        <svg className="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
-                          <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
-                          <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
-                        </svg>
-                        生成中...
-                      </span>
-                    ) : '生成内容'}
-                  </button>
-                  <a
-                    href="/grok"
-                    className="bg-transparent border border-gray-300 text-gray-700 hover:bg-gray-100 py-2 px-4 rounded-md font-medium transition duration-150 ease-in-out flex items-center"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2h-1V9z" clipRule="evenodd" />
-                    </svg>
-                    API 测试页面
-                  </a>
-                </div>
-              </form>
-            </div>
-          </div>
-          
-          {/* Output Section */}
-          <div>
-            <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-200 h-full flex flex-col">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="text-xl font-semibold text-gray-800 flex items-center">
-                  <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                    <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clipRule="evenodd" />
-                  </svg>
-                  生成结果
-                </h2>
-                {output && (
-                  <button
-                    onClick={handleExport}
-                    className="bg-green-600 hover:bg-green-700 text-white py-1.5 px-4 rounded-md text-sm flex items-center transition duration-150 ease-in-out shadow-sm"
-                  >
-                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
-                      <path fillRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" clipRule="evenodd" />
-                    </svg>
-                    导出 Markdown
-                  </button>
-                )}
-              </div>
-              
-              <div className="flex-grow">
-                {error && (
-                  <div className="bg-red-50 text-red-700 p-4 rounded-md border border-red-200 mb-4">
-                    <div className="font-medium flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7 4a1 1 0 11-2 0 1 1 0 012 0zm-1-9a1 1 0 00-1 1v4a1 1 0 102 0V6a1 1 0 00-1-1z" clipRule="evenodd" />
-                      </svg>
-                      错误: {error}
-                    </div>
-                    {apiResponseDetails && (
-                      <div className="mt-2 text-sm pl-7">{apiResponseDetails}</div>
-                    )}
-                  </div>
-                )}
-                
-                {isLoading ? (
-                  <div className="flex justify-center items-center bg-gray-50 border border-gray-200 rounded-lg min-h-[400px]">
-                    <div className="text-center">
-                      <div className="animate-spin rounded-full h-16 w-16 border-b-2 border-blue-500 mx-auto mb-4"></div>
-                      <p className="text-gray-600 mb-2">正在生成内容，请稍候...</p>
-                      <p className="text-xs text-gray-500 max-w-xs mx-auto">这可能需要几秒到几分钟的时间，取决于 API 响应速度和内容长度</p>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="h-full rounded-lg">
-                    <MarkdownEditor 
-                      initialContent={output} 
-                      onContentChange={setOutput} 
-                    />
-                  </div>
-                )}
               </div>
             </div>
           </div>
-        </div>
-        
+        ) : (
+          // 润色功能界面
+          <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
+            <ArticlePolisher />
+          </div>
+        )}
+
         <div className="text-center mt-8 text-gray-600 text-sm">
           <p>AI 写作助手 • <a href="/grok" className="text-blue-600 hover:underline">API 测试页面</a> • 使用先进的大型语言模型</p>
           
-          <div className="mt-4 flex justify-center space-x-4">
-            <a href="https://github.com/GeekyWizKid" target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-black transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.012 8.012 0 0 0 16 8c0-4.42-3.58-8-8-8z"/>
-              </svg>
+          <div className="mt-4 flex justify-center space-x-6">
+            <a href="https://github.com/GeekyWizKid" target="_blank" rel="noopener noreferrer" 
+              className="text-gray-700 hover:text-black transform hover:scale-110 transition-all duration-300 group">
+              <div className="relative p-2 rounded-full bg-gray-100 group-hover:bg-gray-200 transition-all duration-300">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                  <path fillRule="evenodd" clipRule="evenodd" d="M12 0C5.37 0 0 5.37 0 12c0 5.31 3.435 9.795 8.205 11.385.6.105.825-.255.825-.57 0-.285-.015-1.23-.015-2.235-3.015.555-3.795-.735-4.035-1.41-.135-.345-.72-1.41-1.23-1.695-.42-.225-1.02-.78-.015-.795.945-.015 1.62.87 1.845 1.23 1.08 1.815 2.805 1.305 3.495.99.105-.78.42-1.305.765-1.605-2.67-.3-5.46-1.335-5.46-5.925 0-1.305.465-2.385 1.23-3.225-.12-.3-.54-1.53.12-3.18 0 0 1.005-.315 3.3 1.23.96-.27 1.98-.405 3-.405 1.02 0 2.04.135 3 .405 2.295-1.56 3.3-1.23 3.3-1.23.66 1.65.24 2.88.12 3.18.765.84 1.23 1.905 1.23 3.225 0 4.605-2.805 5.625-5.475 5.925.435.375.81 1.095.81 2.22 0 1.605-.015 2.895-.015 3.3 0 .315.225.69.825.57A12.02 12.02 0 0024 12c0-6.63-5.37-12-12-12z" />
+                </svg>
+                <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-xs font-medium">GitHub</span>
+              </div>
             </a>
-            <a href="https://x.com/named_Das" target="_blank" rel="noopener noreferrer" className="text-gray-700 hover:text-blue-400 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M12.6.75h2.454l-5.36 6.142L16 15.25h-4.937l-3.867-5.07-4.425 5.07H.316l5.733-6.57L0 .75h5.063l3.495 4.633L12.601.75Zm-.86 13.028h1.36L4.323 2.145H2.865l8.875 11.633Z"/>
-              </svg>
+            <a href="https://x.com/named_Das" target="_blank" rel="noopener noreferrer" 
+              className="text-gray-700 hover:text-[#1DA1F2] transform hover:scale-110 transition-all duration-300 group">
+              <div className="relative p-2 rounded-full bg-gray-100 group-hover:bg-blue-50 transition-all duration-300">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M12.6.75h2.454l-5.36 6.142L16 15.25h-4.937l-3.867-5.07-4.425 5.07H.316l5.733-6.57L0 .75h5.063l3.495 4.633L12.601.75Zm-.86 13.028h1.36L4.323 2.145H2.865l8.875 11.633Z"/>
+                </svg>
+                <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-xs font-medium">Twitter</span>
+              </div>
             </a>
-            <a href="mailto:dasvenxx@gmail.com.com" className="text-gray-700 hover:text-red-500 transition-colors">
-              <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="currentColor" viewBox="0 0 16 16">
-                <path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/>
-              </svg>
+            <a href="mailto:dasvenxx@gmail.com" 
+              className="text-gray-700 hover:text-[#EA4335] transform hover:scale-110 transition-all duration-300 group">
+              <div className="relative p-2 rounded-full bg-gray-100 group-hover:bg-red-50 transition-all duration-300">
+                <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" viewBox="0 0 16 16">
+                  <path d="M.05 3.555A2 2 0 0 1 2 2h12a2 2 0 0 1 1.95 1.555L8 8.414.05 3.555ZM0 4.697v7.104l5.803-3.558L0 4.697ZM6.761 8.83l-6.57 4.027A2 2 0 0 0 2 14h12a2 2 0 0 0 1.808-1.144l-6.57-4.027L8 9.586l-1.239-.757Zm3.436-.586L16 11.801V4.697l-5.803 3.546Z"/>
+                </svg>
+                <span className="absolute -bottom-6 left-1/2 transform -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity duration-300 text-xs font-medium">Email</span>
+              </div>
             </a>
           </div>
           

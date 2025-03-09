@@ -54,6 +54,21 @@ export interface WritingRequest {
   model: string;
 }
 
+export interface PolishRequest {
+  originalText: string;
+  llmApiUrl: string;
+  llmApiKey: string;
+  model: string;
+  polishType?: 'standard' | 'academic' | 'business' | 'creative';
+}
+
+export interface PolishResponse {
+  originalText: string;
+  polishedText: string;
+  diffMarkup: string;  // 包含标记的差异HTML
+  error?: string;
+}
+
 export interface ApiResponse {
   content: string;
   error?: string;
