@@ -52,24 +52,22 @@ export async function POST(request: NextRequest) {
         stream: false
       } : body;
 
-      // 检查 Ollama 服务是否可用
-      if (isOllama) {
-        try {
-          // 强制使用 IPv4 地址
-          const checkUrl = targetUrl.replace('/api/generate', '').replace('localhost', '127.0.0.1');
-          const checkResponse = await fetch(checkUrl);
-          if (!checkResponse.ok) {
-            console.error('Ollama 服务检查失败:', await checkResponse.text());
-            throw new Error('Ollama 服务不可用');
-          }
-        } catch (checkError) {
-          console.error('Ollama 服务检查错误:', checkError);
-          throw new Error('无法连接到 Ollama 服务，请确保：\n1. Ollama 已安装并运行\n2. 服务地址正确（默认：http://127.0.0.1:11434）\n3. 没有防火墙阻止连接');
-        }
+      // 确保使用正确的 URL - 对于 Ollama，必须是 /api/generate
+      let requestUrl = targetUrl;
+      if (isOllama && !targetUrl.includes('/api/generate')) {
+        const baseUrl = targetUrl.includes('/api/') 
+          ? targetUrl.substring(0, targetUrl.indexOf('/api/')) 
+          : targetUrl;
+        requestUrl = `${baseUrl}/api/generate`;
       }
-
-      // 确保请求 URL 也使用 IPv4
-      const requestUrl = isOllama ? targetUrl.replace('localhost', '127.0.0.1') : targetUrl;
+      
+      // 确保使用 IPv4 地址
+      if (requestUrl.includes('localhost')) {
+        requestUrl = requestUrl.replace('localhost', '127.0.0.1');
+      }
+      
+      console.log('最终请求 URL:', requestUrl);
+      
       const response = await fetch(requestUrl, {
         method: 'POST',
         headers: {

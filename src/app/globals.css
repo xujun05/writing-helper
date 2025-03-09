@@ -75,3 +75,20 @@ body {
   font-size: 1rem;
   white-space: pre-wrap;
 }
+
+/* 添加模型下拉框的脉冲动画 */
+@keyframes pulse {
+  0% {
+    box-shadow: 0 0 0 0 rgba(66, 153, 225, 0.5);
+  }
+  70% {
+    box-shadow: 0 0 0 5px rgba(66, 153, 225, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(66, 153, 225, 0);
+  }
+}
+
+.pulse-animation {
+  animation: pulse 1s ease-in-out;
+}

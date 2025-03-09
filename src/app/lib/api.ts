@@ -13,6 +13,9 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
     const isGrokApi = llmApiUrl.includes('grok') || llmApiUrl.includes('xai');
     const isOllamaApi = llmApiUrl.includes('ollama') || llmApiUrl.includes('11434');
     
+    // URL 由前端组件和代理处理，这里直接使用
+    const apiUrl = llmApiUrl;
+    
     // Prepare request body based on API provider
     let requestBody: Record<string, unknown>;
     let isOllama = false;
@@ -25,6 +28,7 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
         stream: false
       };
       isOllama = true;
+      console.log('使用 Ollama API 格式, 生成内容请求:', JSON.stringify(requestBody));
     } else if (isGrokApi) {
       // Grok API format
       requestBody = {
@@ -62,7 +66,7 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
       headers['Authorization'] = `Bearer ${llmApiKey}`;
     }
 
-    console.log('准备发送请求到:', llmApiUrl);
+    console.log('准备发送请求到:', apiUrl);
     console.log('请求头:', JSON.stringify(headers, null, 2).replace(llmApiKey, '[REDACTED]'));
     console.log('请求体:', JSON.stringify(requestBody, null, 2));
     
@@ -75,7 +79,7 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          targetUrl: llmApiUrl,
+          targetUrl: apiUrl,  // 使用可能修正后的 URL
           headers,
           body: requestBody,
           isOllama
@@ -231,38 +235,30 @@ function generateDiffMarkup(original: string, polished: string): string {
 // 文章润色API
 export async function polishContent(request: PolishRequest): Promise<PolishResponse> {
   try {
-    const { originalText, llmApiUrl, llmApiKey, model, polishType = 'standard' } = request;
+    const { originalText, llmApiUrl, llmApiKey, model, polishType } = request;
     
-    if (!originalText || originalText.trim() === '') {
-      return {
-        originalText: '',
-        polishedText: '',
-        diffMarkup: '',
-        error: '请提供需要润色的文章内容'
-      };
-    }
+    // 生成润色提示词
+    const promptTemplate = `请帮我润色以下文章，保持主要内容不变，但提升表达效果和语言流畅度。${polishType === 'academic' 
+      ? '使用更加学术和专业的语言。' 
+      : polishType === 'business' 
+        ? '使用更加商业和专业的语言。' 
+        : polishType === 'creative' 
+          ? '使用更加生动和有创意的语言，增加趣味性和吸引力。' 
+          : '使用更加流畅和自然的语言。'}
     
-    // 构建提示词
-    const polishTypePrompt = {
-      'standard': '请对以下文章进行语言润色，修正语法错误，提高表达流畅度，使文章更易读，但保持原意不变。',
-      'academic': '请对以下学术文章进行润色，使用更专业、正式的学术用语，修正语法问题，保持学术严谨性。',
-      'business': '请对以下商业文档进行润色，使用更专业的商业术语，提高文档的清晰度和说服力。',
-      'creative': '请对以下创意文章进行润色，使表达更生动、有趣，增强文章的感染力和吸引力，但保持原意。'
-    }[polishType];
-    
-    const promptTemplate = `${polishTypePrompt}
-    
-    请修改以下文章，并明确指出修改了哪些内容(可以用"【原文】...【修改】..."的格式标注)：
-    
-    ${originalText}
-    
-    只返回润色后的文章内容，不需要其他解释。`;
-    
-    // Detect API provider type from URL (simple detection)
+以下是原文：
+${originalText}
+
+请提供润色后的文本。只返回润色后的完整文本，不要添加任何说明或解释。`;
+
+    // 确定API提供商类型
     const isGrokApi = llmApiUrl.includes('grok') || llmApiUrl.includes('xai');
     const isOllamaApi = llmApiUrl.includes('ollama') || llmApiUrl.includes('11434');
     
-    // Prepare request body based on API provider
+    // URL 由前端组件和代理处理，这里直接使用
+    const apiUrl = llmApiUrl;
+    
+    // 根据API提供商准备不同的请求格式
     let requestBody: Record<string, unknown>;
     let isOllama = false;
     
@@ -274,6 +270,7 @@ export async function polishContent(request: PolishRequest): Promise<PolishRespo
         stream: false
       };
       isOllama = true;
+      console.log('使用 Ollama API 格式, 润色请求:', JSON.stringify(requestBody));
     } else if (isGrokApi) {
       // Grok API format
       requestBody = {
@@ -310,54 +307,62 @@ export async function polishContent(request: PolishRequest): Promise<PolishRespo
       'Content-Type': 'application/json',
     };
     
-    // 如果有API密钥，添加授权头
-    if (llmApiKey) {
+    // 如果有API密钥且不是 Ollama，添加授权头
+    if (llmApiKey && !isOllamaApi) {
       headers['Authorization'] = `Bearer ${llmApiKey}`;
     }
     
+    console.log('润色请求目标:', apiUrl);
+    console.log('请求头:', JSON.stringify(headers, null, 2).replace(llmApiKey || '', '[REDACTED]'));
+    
     // 发送请求到代理
-    const proxyResponse = await fetch(proxyUrl, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        targetUrl: llmApiUrl,
-        headers,
+    try {
+      const proxyResponse = await fetch(proxyUrl, {
         method: 'POST',
-        body: requestBody,
-        isOllama
-      }),
-    });
-    
-    if (!proxyResponse.ok) {
-      throw new Error(`代理请求失败: ${proxyResponse.status}`);
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          targetUrl: apiUrl,
+          headers,
+          body: requestBody,
+          isOllama
+        }),
+      });
+      
+      if (!proxyResponse.ok) {
+        const errorData = await proxyResponse.json();
+        throw new Error(errorData.error?.message || `代理服务错误: ${proxyResponse.status}`);
+      }
+      
+      const data = await proxyResponse.json();
+      console.log('API 响应:', data);
+      
+      // 提取内容
+      let polishedText = '';
+      
+      if (data.choices && data.choices.length > 0) {
+        polishedText = data.choices[0].message.content;
+      } else if (data.content) {
+        polishedText = data.content;
+      } else if (data.response) {
+        polishedText = data.response;
+      } else {
+        throw new Error('无法从API响应中提取内容');
+      }
+      
+      // 生成差异标记
+      const diffMarkup = generateDiffMarkup(originalText, polishedText);
+      
+      return {
+        originalText,
+        polishedText,
+        diffMarkup
+      };
+    } catch (proxyError) {
+      console.error('代理请求失败:', proxyError);
+      throw proxyError;
     }
-    
-    const data = await proxyResponse.json();
-    console.log('API 响应:', data);
-    
-    // 提取内容
-    let polishedText = '';
-    
-    if (data.choices && data.choices.length > 0) {
-      polishedText = data.choices[0].message.content;
-    } else if (data.content) {
-      polishedText = data.content;
-    } else if (data.response) {
-      polishedText = data.response;
-    } else {
-      throw new Error('无法从API响应中提取内容');
-    }
-    
-    // 生成差异标记
-    const diffMarkup = generateDiffMarkup(originalText, polishedText);
-    
-    return {
-      originalText,
-      polishedText,
-      diffMarkup
-    };
   } catch (error) {
     console.error('润色请求失败:', error);
     return {

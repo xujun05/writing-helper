@@ -25,38 +25,66 @@ export default function ArticlePolisher() {
   const fetchOllamaModels = async () => {
     try {
       setError(null); // 清除之前的错误
+      console.log('开始获取 Ollama 模型列表...');
       
-      // 检查 Ollama 服务是否可用
-      const response = await fetch('http://localhost:11434/api/tags', {
+      // 使用代理接口而不是直接调用本地 Ollama API
+      const response = await fetch('/api/proxy/ollama-models', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ollamaUrl: 'http://localhost:11434/api/tags'
+        }),
         // 添加超时设置以避免长时间等待
         signal: AbortSignal.timeout(5000)
       });
       
       if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`获取模型列表失败: ${response.status} ${response.statusText}`, errorText);
         throw new Error(`无法获取模型列表: ${response.status} ${response.statusText}`);
       }
       
       const data = await response.json();
+      console.log('获取到的 Ollama 模型数据:', data);
+      
+      // 检查数据格式，处理可能的不同结构
+      let modelsList: string[] = [];
+      
       if (data.models && Array.isArray(data.models)) {
-        // 确保返回的模型列表是一个数组
-        const models = data.models.filter((model: unknown) => typeof model === 'string') as string[];
-        setAvailableModels(models);
+        modelsList = data.models.filter((model: unknown) => typeof model === 'string') as string[];
+      } else if (data.names && Array.isArray(data.names)) {
+        modelsList = data.names.filter((model: unknown) => typeof model === 'string') as string[];
+      }
+      
+      console.log('处理后的模型列表:', modelsList);
+      
+      if (modelsList.length > 0) {
+        // 为了确保UI更新，先清空后设置
+        setAvailableModels([]);
+        setTimeout(() => {
+          setAvailableModels(modelsList);
+          
+          // 如果当前模型不在列表中，则选择第一个模型
+          if (!modelsList.includes(ollamaModel)) {
+            setOllamaModel(modelsList[0]);
+          }
+        }, 10);
         
-        // 如果当前模型不在列表中且列表不为空，则选择第一个模型
-        if (models.length > 0 && !models.includes(ollamaModel)) {
-          setOllamaModel(models[0]);
-        }
+        console.log(`成功获取到 ${modelsList.length} 个 Ollama 模型`);
       } else {
-        // 如果返回的数据格式不符合预期，使用空数组
+        console.warn('未找到 Ollama 模型列表');
         setAvailableModels([]);
         // 保持默认模型名称 'llama2'
       }
-      return data.models; // 返回获取到的模型列表
+      
+      return modelsList; // 返回处理后的模型列表
     } catch (error) {
       console.error('获取模型列表失败:', error);
       setAvailableModels([]); // 清空模型列表，使用默认值
       setError('无法获取 Ollama 模型列表，请确保 Ollama 服务正在运行');
-      throw error; // 向上抛出错误，以便调用方处理
+      return []; // 返回空数组，避免后续处理出错
     }
   };
 
@@ -79,30 +107,33 @@ export default function ArticlePolisher() {
     setPolishedResult(null);
 
     try {
-      // 检查 Ollama 服务是否可用
-      if (apiProvider === 'ollama') {
-        try {
-          const checkResponse = await fetch(ollamaEndpoint.replace('/api/generate', '/api/tags'));
-          if (!checkResponse.ok) {
-            throw new Error('无法连接到 Ollama 服务，请确保：\n1. Ollama 已安装并运行\n2. 服务地址正确（默认：http://localhost:11434）\n3. 没有防火墙阻止连接');
-          }
-        } catch (error) {
-          throw new Error('无法连接到 Ollama 服务，请确保：\n1. Ollama 已安装并运行\n2. 服务地址正确（默认：http://localhost:11434）\n3. 没有防火墙阻止连接');
-        }
+      // 检查 API 密钥要求
+      if (apiProvider !== 'ollama' && !apiKey) {
+        // 非 Ollama 提供商需要 API 密钥
+        throw new Error(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : '自定义'} API 需要提供有效的 API 密钥`);
       }
 
       if (!originalText.trim()) {
         throw new Error('请输入需要润色的文章内容');
       }
 
-      // 根据API提供商选择不同的URL和模型
-      const apiUrl = apiProvider === 'ollama' ? ollamaEndpoint : apiEndpoint;
+      // 确保使用正确的 URL 端点
+      let apiUrl = apiProvider === 'ollama' ? ollamaEndpoint : apiEndpoint;
+      if (apiProvider === 'ollama' && !apiUrl.includes('/api/generate')) {
+        const baseUrl = apiUrl.includes('/api/') 
+          ? apiUrl.substring(0, apiUrl.indexOf('/api/')) 
+          : apiUrl;
+        apiUrl = `${baseUrl}/api/generate`;
+        console.log('使用 Ollama 生成端点:', apiUrl);
+      }
+
+      // 根据API提供商选择不同的模型
       const model = apiProvider === 'ollama' ? ollamaModel : apiProvider === 'openai' ? 'gpt-4' : apiProvider === 'grok' ? 'grok-2-latest' : '';
 
       const request: PolishRequest = {
         originalText,
         llmApiUrl: apiUrl,
-        llmApiKey: apiKey,
+        llmApiKey: apiKey, // Ollama 不需要 API 密钥，但保留该字段以保持接口一致性
         model: model,
         polishType
       };
@@ -150,7 +181,7 @@ export default function ArticlePolisher() {
                   } else if (provider === 'grok') {
                     setApiEndpoint('https://api.grok.ai/v1/chat/completions');
                   } else if (provider === 'ollama') {
-                    setOllamaEndpoint('http://localhost:11434/api/generate');
+                    setOllamaEndpoint('http://localhost:11434/api/generate');  // 确保使用 /api/generate 端点
                   }
                   // 自定义提供商不更改URL
                 }}
