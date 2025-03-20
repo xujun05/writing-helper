@@ -24,8 +24,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="zh" data-theme="light" style={{colorScheme: "light"}}>
-      <head>
+    <html lang="zh">
+      <body className={`${geistSans.variable} ${geistMono.variable} antialiased`}>
         <Script id="cherry-studio-detection" strategy="afterInteractive">
           {`
             // 检测是否在Cherry Studio中运行
@@ -48,10 +48,6 @@ export default function RootLayout({
             }
           `}
         </Script>
-      </head>
-      <body
-        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
-      >
         {children}
       </body>
     </html>

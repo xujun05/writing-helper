@@ -110,7 +110,7 @@ export default function ArticlePolisher() {
       // 检查 API 密钥要求
       if (apiProvider !== 'ollama' && !apiKey) {
         // 非 Ollama 提供商需要 API 密钥
-        throw new Error(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : '自定义'} API 需要提供有效的 API 密钥`);
+        throw new Error(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : apiProvider === 'deepseek' ? 'DeepSeek' : '自定义'} API 需要提供有效的 API 密钥`);
       }
 
       if (!originalText.trim()) {
@@ -128,7 +128,10 @@ export default function ArticlePolisher() {
       }
 
       // 根据API提供商选择不同的模型
-      const model = apiProvider === 'ollama' ? ollamaModel : apiProvider === 'openai' ? 'gpt-4' : apiProvider === 'grok' ? 'grok-2-latest' : '';
+      const model = apiProvider === 'ollama' ? ollamaModel : 
+                    apiProvider === 'openai' ? 'gpt-4' : 
+                    apiProvider === 'grok' ? 'grok-2-latest' : 
+                    apiProvider === 'deepseek' ? 'deepseek-chat' : '';
 
       const request: PolishRequest = {
         originalText,
@@ -182,6 +185,8 @@ export default function ArticlePolisher() {
                     setApiEndpoint('https://api.grok.ai/v1/chat/completions');
                   } else if (provider === 'ollama') {
                     setOllamaEndpoint('http://localhost:11434/api/generate');  // 确保使用 /api/generate 端点
+                  } else if (provider === 'deepseek') {
+                    setApiEndpoint('https://api.deepseek.com/v1/chat/completions');
                   }
                   // 自定义提供商不更改URL
                 }}
@@ -195,7 +200,7 @@ export default function ArticlePolisher() {
                 }}
                 apiKey={apiKey}
                 setApiKey={setApiKey}
-                model={apiProvider === 'ollama' ? ollamaModel : apiProvider === 'openai' ? 'gpt-4' : apiProvider === 'grok' ? 'grok-2-latest' : ''}
+                model={apiProvider === 'ollama' ? ollamaModel : apiProvider === 'openai' ? 'gpt-4' : apiProvider === 'grok' ? 'grok-2-latest' : apiProvider === 'deepseek' ? 'deepseek-chat' : ''}
                 setModel={(model) => {
                   if (apiProvider === 'ollama') {
                     setOllamaModel(model);

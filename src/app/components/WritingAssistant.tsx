@@ -62,10 +62,11 @@ const defaultPromptStyle: PromptStyle = {
 type TabType = 'writing' | 'polish';
 
 // 默认 API URLs
-const API_URLS = {
+const API_URLS: Record<ApiProvider, string> = {
   openai: 'https://api.openai.com/v1/chat/completions',
-  grok: 'https://api.x.ai/v1/chat/completions',
+  grok: 'https://api.grok.ai/v1/chat/completions',
   ollama: 'http://localhost:11434/api/generate',
+  deepseek: 'https://api.deepseek.com/v1/chat/completions',
   custom: ''
 };
 
@@ -210,6 +211,9 @@ export default function WritingAssistant() {
       setLlmApiKey('');
     } else if (provider === 'openai') {
       setModel('gpt-4');
+    } else if (provider === 'deepseek') {
+      setLlmApiUrl('https://api.deepseek.com/v1/chat/completions');
+      setModel('deepseek-chat');
     }
     
     // 重置错误
@@ -231,7 +235,7 @@ export default function WritingAssistant() {
     try {
       // 检查 API 密钥
       if (apiProvider !== 'ollama' && !llmApiKey) {
-        throw new Error(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : '自定义'} API 需要提供有效的 API 密钥`);
+        throw new Error(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : apiProvider === 'deepseek' ? 'DeepSeek' : '自定义'} API 需要提供有效的 API 密钥`);
       }
       
       // 确保使用正确的 URL 端点
@@ -398,6 +402,9 @@ export default function WritingAssistant() {
                             setModel('llama2');
                             // 清空 API Key，因为 Ollama 不需要
                             setLlmApiKey('');
+                          } else if (provider === 'deepseek') {
+                            setLlmApiUrl('https://api.deepseek.com/v1/chat/completions');
+                            setModel('deepseek-chat');
                           }
                           // 重置错误
                           setError(null);

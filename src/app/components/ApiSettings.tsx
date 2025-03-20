@@ -2,13 +2,14 @@
 
 import React, { useState } from 'react';
 
-export type ApiProvider = 'openai' | 'grok' | 'ollama' | 'custom';
+export type ApiProvider = 'openai' | 'grok' | 'ollama' | 'deepseek' | 'custom';
 
 // API 提供商帮助信息
 const API_HELP: Record<ApiProvider, string> = {
   openai: '使用 OpenAI API，例如 GPT-4',
   grok: '使用 Grok API (X.AI)',
   ollama: '使用本地运行的 Ollama 服务',
+  deepseek: '使用 DeepSeek API，例如 DeepSeek-V2',
   custom: '配置自定义 API 端点'
 };
 
@@ -17,6 +18,7 @@ const API_URLS: Record<ApiProvider, string> = {
   openai: 'https://api.openai.com/v1/chat/completions',
   grok: 'https://api.x.ai/v1/chat/completions',
   ollama: 'http://localhost:11434/api/generate',  // 确保使用 /api/generate 端点
+  deepseek: 'https://api.deepseek.com/v1/chat/completions',
   custom: ''
 };
 
@@ -79,6 +81,8 @@ export default function ApiSettings({
           // 用户可以手动点击"刷新模型列表"按钮重试
         });
       }
+    } else if (provider === 'deepseek') {
+      setModel('deepseek-chat');
     }
     // 自定义提供商不设置默认模型
   };
@@ -117,6 +121,7 @@ export default function ApiSettings({
               <option value="openai">OpenAI</option>
               <option value="grok">Grok (xAI)</option>
               <option value="ollama">Ollama (本地)</option>
+              <option value="deepseek">DeepSeek</option>
               <option value="custom">自定义</option>
             </select>
             <p className="mt-1 text-xs text-gray-500">

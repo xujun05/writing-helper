@@ -12,6 +12,7 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
     // Detect API provider type from URL (simple detection)
     const isGrokApi = llmApiUrl.includes('grok') || llmApiUrl.includes('xai');
     const isOllamaApi = llmApiUrl.includes('ollama') || llmApiUrl.includes('11434');
+    const isDeepSeekApi = llmApiUrl.includes('deepseek');
     
     // URL 由前端组件和代理处理，这里直接使用
     const apiUrl = llmApiUrl;
@@ -39,6 +40,19 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
           }
         ],
         model: "grok-2-latest",
+        temperature: 0.7,
+        stream: false
+      };
+    } else if (isDeepSeekApi) {
+      // DeepSeek API format (与 OpenAI 兼容但有自己的模型名称)
+      requestBody = {
+        model: model || 'deepseek-chat',
+        messages: [
+          {
+            role: 'user',
+            content: promptTemplate
+          }
+        ],
         temperature: 0.7,
         stream: false
       };
@@ -254,6 +268,7 @@ ${originalText}
     // 确定API提供商类型
     const isGrokApi = llmApiUrl.includes('grok') || llmApiUrl.includes('xai');
     const isOllamaApi = llmApiUrl.includes('ollama') || llmApiUrl.includes('11434');
+    const isDeepSeekApi = llmApiUrl.includes('deepseek');
     
     // URL 由前端组件和代理处理，这里直接使用
     const apiUrl = llmApiUrl;
@@ -282,6 +297,19 @@ ${originalText}
         ],
         model: "grok-2-latest",
         temperature: 0.7,
+        stream: false
+      };
+    } else if (isDeepSeekApi) {
+      // DeepSeek API format (与 OpenAI 兼容但有自己的模型名称)
+      requestBody = {
+        model: model || 'deepseek-chat',
+        messages: [
+          {
+            role: 'user',
+            content: promptTemplate
+          }
+        ],
+        temperature: 0.3,
         stream: false
       };
     } else {
