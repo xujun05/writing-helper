@@ -10,6 +10,7 @@
 ## 🌟 功能特点
 
 - **丰富的写作风格定制**：详细的提示词风格编辑器，包括语言、结构、叙述、情感、思维等多个维度
+- **AI文本优化**：支持AI文本优化，帮助通过 **GPTZero** 等AI检测器
 - **多模型支持**：兼容多种大型语言模型API，包括OpenAI、Anthropic Claude、Google Gemini、Groq、Ollama和Grok
 - **API设置灵活性**：可折叠的API设置面板，便于配置不同的API端点和密钥
 - **用户友好界面**：使用Tailwind CSS打造的现代化UI，具有响应式设计
@@ -45,8 +46,11 @@ npm run dev
 然后在浏览器中访问 [http://localhost:3000](http://localhost:3000)。
 
 ### 预览
+#### 写作助手
 ![preview](./preview/preview.jpg)
-
+#### AI文本优化
+![preview](./preview/xigao_01.png)
+![preview](./preview/xigao_02.png)
 ## 📝 使用方法
 
 1. **API 设置**：
