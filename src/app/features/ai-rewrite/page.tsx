@@ -10,6 +10,7 @@ const presetPrompts = [
   {
     id: 'human-writing',
     name: '人类写作特征优化',
+    description: '全面的人类写作特征优化方案，包含语言变化、思维过程、文化特征、修辞多样性、结构逻辑、情感语气等七大方面的优化策略',
     prompt: `请按照以下指导原则生成内容，以减少文本中的AI特征：
 
 1. 语言变化与不规则性
@@ -48,6 +49,29 @@ const presetPrompts = [
    - 如果是创意写作，展现个人化的写作风格和叙事技巧
 
 请根据以上原则重写以下文本，确保文本既专业准确又具有自然的人类表达特征。`
+  },
+  {
+    id: 'ai-guide',
+    name: 'AI修改指导',
+    description: '分析文本内容，识别AI特征，生成个性化改写策略，提供具体示例，帮助减少AI痕迹，使文本更像人类撰写',
+    prompt: `请分析以下内容，并生成一个去除AI特征的策略：
+
+[用户输入的内容示例或描述]
+
+请完成以下任务：
+1. **识别风格特征**：分析文本的整体风格（如叙事性、描述性、技术性、对话性等）。
+2. **检测AI特征**：找出文本中可能的AI生成特征（如过于正式、缺乏个性化、重复模式等）。
+3. **生成改写策略**：提出具体的改写策略，帮助减少AI痕迹，包括但不限于：
+   - 引入更多个人观点或情感表达
+   - 增加或调整细节描述以增强真实性
+   - 使用多样化的句式和词汇
+   - 融入适当的幽默或文化背景
+   - 调整文本结构以更接近人类写作习惯
+4. **提供改写示例**：给出2-3个具体的改写示例，展示如何应用上述策略。
+
+请确保生成的策略简洁明了，易于应用，并能有效减少AI检测率。`
+
+
   }
 ];
 
@@ -69,7 +93,7 @@ export default function AIRewritePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiResponseDetails, setApiResponseDetails] = useState<string | null>(null);
-  
+
   // API 设置状态
   const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
   const [llmApiUrl, setLlmApiUrl] = useState<string>(API_URLS.openai);
@@ -89,7 +113,7 @@ export default function AIRewritePage() {
   const fetchOllamaModels = async () => {
     try {
       setError(null);
-      
+
       const response = await fetch('/api/proxy/ollama-models', {
         method: 'POST',
         headers: {
@@ -100,25 +124,25 @@ export default function AIRewritePage() {
         }),
         signal: AbortSignal.timeout(5000)
       });
-      
+
       if (!response.ok) {
         throw new Error(`无法获取模型列表: ${response.status} ${response.statusText}`);
       }
-      
+
       const data = await response.json();
-      
+
       // 处理模型列表
       let modelsList: string[] = [];
-      
+
       if (data.models && Array.isArray(data.models)) {
         modelsList = data.models.filter((model: unknown) => typeof model === 'string') as string[];
       } else if (data.names && Array.isArray(data.names)) {
         modelsList = data.names.filter((model: unknown) => typeof model === 'string') as string[];
       }
-      
+
       if (modelsList.length > 0) {
         setAvailableModels(modelsList);
-        
+
         // 如果当前模型不在列表中，则选择第一个模型
         if (!modelsList.includes(model)) {
           setModel(modelsList[0]);
@@ -126,12 +150,12 @@ export default function AIRewritePage() {
       } else {
         setAvailableModels([]);
       }
-      
+
       return modelsList;
     } catch (error) {
       console.error('获取模型列表失败:', error);
       setAvailableModels([]);
-      
+
       if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
         setError('无法连接到 Ollama 服务，请确保 Ollama 已安装并运行');
       } else if (error instanceof DOMException && error.name === 'AbortError') {
@@ -139,7 +163,7 @@ export default function AIRewritePage() {
       } else {
         setError('无法获取 Ollama 模型列表，请确保 Ollama 服务正在运行');
       }
-      
+
       return [];
     }
   };
@@ -156,13 +180,13 @@ export default function AIRewritePage() {
       const isGrokApi = llmApiUrl.includes('grok') || llmApiUrl.includes('xai');
       const isOllamaApi = llmApiUrl.includes('ollama') || llmApiUrl.includes('11434');
       const isDeepSeekApi = llmApiUrl.includes('deepseek');
-      
+
       // 准备请求体
       let requestBody: Record<string, unknown>;
       let isOllama = false;
-      
+
       const fullPrompt = `${prompt}\n\n原文：\n${text}`;
-      
+
       if (isOllamaApi) {
         // Ollama API格式
         requestBody = {
@@ -201,17 +225,17 @@ export default function AIRewritePage() {
           temperature: 0.7
         };
       }
-      
+
       // 准备请求头
       const headers: Record<string, string> = {
         'Content-Type': 'application/json',
       };
-      
+
       // 如果不是Ollama，添加授权头
       if (!isOllamaApi && llmApiKey) {
         headers['Authorization'] = `Bearer ${llmApiKey}`;
       }
-      
+
       // 使用代理API避免CORS问题
       const proxyResponse = await fetch('/api/proxy', {
         method: 'POST',
@@ -225,19 +249,19 @@ export default function AIRewritePage() {
           isOllama
         })
       });
-      
+
       if (!proxyResponse.ok) {
-        const errorData = await proxyResponse.json().catch(() => ({ 
-          error: { message: `代理服务错误: ${proxyResponse.status}` } 
+        const errorData = await proxyResponse.json().catch(() => ({
+          error: { message: `代理服务错误: ${proxyResponse.status}` }
         }));
         throw new Error(errorData.error?.message || `代理服务错误: ${proxyResponse.status}`);
       }
-      
+
       const data = await proxyResponse.json();
-      
+
       // 尝试不同方式提取内容
       let content = '';
-      
+
       if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
         content = data.choices[0].message.content;
       } else if (data.message && data.message.content) {
@@ -257,7 +281,7 @@ export default function AIRewritePage() {
       } else {
         throw new Error(`无法从API响应中提取内容: ${JSON.stringify(data)}`);
       }
-      
+
       return { content };
     } catch (error) {
       console.error('API请求错误:', error);
@@ -271,14 +295,14 @@ export default function AIRewritePage() {
   // 处理提交
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
+
     if (!content.trim()) return;
-    
+
     setLoading(true);
     setResult('');
     setError(null);
     setApiResponseDetails(null);
-    
+
     try {
       // 检查 API 密钥
       if (apiProvider !== 'ollama' && !llmApiKey) {
@@ -286,10 +310,10 @@ export default function AIRewritePage() {
       }
 
       const promptText = getSelectedPromptText();
-      
+
       // 调用API生成内容
       const response = await getContentFromApi(promptText, content);
-      
+
       if (response.error) {
         setError(response.error);
         setApiResponseDetails('请查看浏览器控制台以获取更多错误详情。');
@@ -302,7 +326,7 @@ export default function AIRewritePage() {
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '处理文本时发生未知错误';
       setError(errorMessage);
-      
+
       // 添加更多帮助信息
       if (errorMessage.includes('Failed to fetch') || errorMessage.includes('网络')) {
         setApiResponseDetails('这可能是由于网络连接问题或 CORS 限制导致的。请确保您的网络连接稳定，并且 API 服务允许从您的网站发出请求。');
@@ -342,7 +366,7 @@ export default function AIRewritePage() {
           </div>
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* API 设置部分 */}
-            <ApiSettings 
+            <ApiSettings
               showSettings={showApiSettings}
               toggleSettings={toggleApiSettings}
               apiProvider={apiProvider}
@@ -411,21 +435,18 @@ export default function AIRewritePage() {
                   <label className="block text-sm font-medium text-gray-700 mb-1">选择优化预设</label>
                   <div className="grid grid-cols-1 gap-2">
                     {presetPrompts.map((preset) => (
-                      <div 
-                        key={preset.id} 
-                        className={`border rounded-md p-3 cursor-pointer transition-colors ${
-                          selectedPromptId === preset.id 
-                            ? 'bg-blue-50 border-blue-500' 
+                      <div
+                        key={preset.id}
+                        className={`border rounded-md p-3 cursor-pointer transition-colors ${selectedPromptId === preset.id
+                            ? 'bg-blue-50 border-blue-500'
                             : 'hover:bg-gray-50 border-gray-200'
-                        }`}
+                          }`}
                         onClick={() => setSelectedPromptId(preset.id)}
                       >
                         <div className="font-medium">{preset.name}</div>
-                        {selectedPromptId === preset.id && preset.id === 'human-writing' && (
-                          <div className="mt-2 text-xs text-gray-500">
-                            全面的人类写作特征优化方案，包含语言变化、思维过程、文化特征、修辞多样性、结构逻辑、情感语气等七大方面的优化策略
-                          </div>
-                        )}
+                        <div className="mt-2 text-xs text-gray-500">
+                          {preset.description}
+                        </div>
                       </div>
                     ))}
                   </div>
@@ -454,11 +475,10 @@ export default function AIRewritePage() {
               <button
                 type="submit"
                 disabled={loading || !content.trim() || (useCustomPrompt && !customPrompt.trim()) || (apiProvider !== 'ollama' && !llmApiKey)}
-                className={`px-4 py-2 rounded-md text-white font-medium ${
-                  loading || !content.trim() || (useCustomPrompt && !customPrompt.trim()) || (apiProvider !== 'ollama' && !llmApiKey)
+                className={`px-4 py-2 rounded-md text-white font-medium ${loading || !content.trim() || (useCustomPrompt && !customPrompt.trim()) || (apiProvider !== 'ollama' && !llmApiKey)
                     ? 'bg-indigo-300 cursor-not-allowed'
                     : 'bg-indigo-600 hover:bg-indigo-700'
-                }`}
+                  }`}
               >
                 {loading ? '处理中...' : '优化文本'}
               </button>
