@@ -2,6 +2,7 @@
 
 import React, { useState } from 'react';
 import Link from 'next/link';
+import FeatureLayout from '../components/FeatureLayout';
 
 export default function GrokTest() {
   const [apiKey, setApiKey] = useState('');
@@ -207,7 +208,7 @@ export default function GrokTest() {
   };
 
   return (
-    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 py-8 px-4">
+    <FeatureLayout>
       <div className="max-w-4xl mx-auto">
         <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-200 mb-6">
           <div className="flex items-center justify-between mb-6">
@@ -507,6 +508,6 @@ export default function GrokTest() {
           <p className="mt-2 text-xs text-gray-500">© {new Date().getFullYear()} 写作助手 - 由 Cursor 强力驱动</p>
         </div>
       </div>
-    </div>
+    </FeatureLayout>
   );
 } 

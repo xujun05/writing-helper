@@ -1,0 +1,516 @@
+"use client";
+
+import React, { useState } from 'react';
+import FeatureLayout from '../../components/FeatureLayout';
+import ApiSettings, { ApiProvider } from '../../components/ApiSettings';
+import { ApiResponse } from '../../../app/lib/types';
+
+// 预设的洗稿 prompt
+const presetPrompts = [
+  {
+    id: 'human-writing',
+    name: '人类写作特征优化',
+    prompt: `请按照以下指导原则生成内容，以减少文本中的AI特征：
+
+1. 语言变化与不规则性
+   - 在句子长度上保持不规则变化，混合使用长句、短句和片段句
+   - 偶尔使用不完全标准的表达方式，如口语化表达或省略句
+   - 在段落长度上保持不规则性，避免过于均匀的段落结构
+
+2. 思维过程与主观性
+   - 展示思考的演进过程，包括初始想法、修正和反思
+   - 加入个人观点和立场，使用"我认为"、"在我看来"等主观表达
+   - 表达适当的不确定性，使用"可能"、"或许"、"我不确定，但..."等表达
+
+3. 文化与时代特征
+   - 融入当下特定的文化参考和时事引用
+   - 使用特定群体或领域的习惯表达和术语
+   - 适当使用新兴词汇或表达方式
+
+4. 修辞与表达多样性
+   - 使用多样化的修辞手法，如比喻、反问、夸张等
+   - 在表达同一概念时使用不同的表述方式
+   - 偶尔使用创新性表达或自创词汇
+
+5. 结构与逻辑特征
+   - 避免过于完美的结构和过于线性的逻辑展开
+   - 偶尔进行话题跳转或思维跳跃，然后再回到主题
+   - 在适当位置加入个人经历或案例作为支撑
+
+6. 情感与语气变化
+   - 在文本中展现情感波动和语气变化
+   - 使用感叹、疑问等多样化的语气
+   - 在正式与非正式语气之间适当切换
+
+7. 特定领域处理
+   - 如果是学术文本，融入学科特定的表达习惯和引用模式
+   - 如果是新闻稿，模拟特定媒体的风格和报道角度
+   - 如果是创意写作，展现个人化的写作风格和叙事技巧
+
+请根据以上原则重写以下文本，确保文本既专业准确又具有自然的人类表达特征。`
+  }
+];
+
+// 默认 API URLs
+const API_URLS: Record<ApiProvider, string> = {
+  openai: 'https://api.openai.com/v1/chat/completions',
+  grok: 'https://api.x.ai/v1/chat/completions',
+  ollama: 'http://localhost:11434/api/generate',
+  deepseek: 'https://api.deepseek.com/v1/chat/completions',
+  custom: ''
+};
+
+export default function AIRewritePage() {
+  const [content, setContent] = useState('');
+  const [result, setResult] = useState('');
+  const [selectedPromptId, setSelectedPromptId] = useState('human-writing');
+  const [customPrompt, setCustomPrompt] = useState('');
+  const [useCustomPrompt, setUseCustomPrompt] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [apiResponseDetails, setApiResponseDetails] = useState<string | null>(null);
+  
+  // API 设置状态
+  const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
+  const [llmApiUrl, setLlmApiUrl] = useState<string>(API_URLS.openai);
+  const [llmApiKey, setLlmApiKey] = useState<string>('');
+  const [model, setModel] = useState<string>('gpt-4');
+  const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+
+  // 获取当前选中的预设prompt文本
+  const getSelectedPromptText = () => {
+    if (useCustomPrompt) return customPrompt;
+    const selected = presetPrompts.find(p => p.id === selectedPromptId);
+    return selected ? selected.prompt : '';
+  };
+
+  // 获取 Ollama 模型列表
+  const fetchOllamaModels = async () => {
+    try {
+      setError(null);
+      
+      const response = await fetch('/api/proxy/ollama-models', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          ollamaUrl: 'http://localhost:11434/api/tags'
+        }),
+        signal: AbortSignal.timeout(5000)
+      });
+      
+      if (!response.ok) {
+        throw new Error(`无法获取模型列表: ${response.status} ${response.statusText}`);
+      }
+      
+      const data = await response.json();
+      
+      // 处理模型列表
+      let modelsList: string[] = [];
+      
+      if (data.models && Array.isArray(data.models)) {
+        modelsList = data.models.filter((model: unknown) => typeof model === 'string') as string[];
+      } else if (data.names && Array.isArray(data.names)) {
+        modelsList = data.names.filter((model: unknown) => typeof model === 'string') as string[];
+      }
+      
+      if (modelsList.length > 0) {
+        setAvailableModels(modelsList);
+        
+        // 如果当前模型不在列表中，则选择第一个模型
+        if (!modelsList.includes(model)) {
+          setModel(modelsList[0]);
+        }
+      } else {
+        setAvailableModels([]);
+      }
+      
+      return modelsList;
+    } catch (error) {
+      console.error('获取模型列表失败:', error);
+      setAvailableModels([]);
+      
+      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
+        setError('无法连接到 Ollama 服务，请确保 Ollama 已安装并运行');
+      } else if (error instanceof DOMException && error.name === 'AbortError') {
+        setError('获取模型列表超时，请检查 Ollama 服务是否响应');
+      } else {
+        setError('无法获取 Ollama 模型列表，请确保 Ollama 服务正在运行');
+      }
+      
+      return [];
+    }
+  };
+
+  // 处理API设置的显示/隐藏
+  const toggleApiSettings = () => {
+    setShowApiSettings(!showApiSettings);
+  };
+
+  // 直接从API获取内容
+  async function getContentFromApi(prompt: string, text: string): Promise<ApiResponse> {
+    try {
+      // 检测API提供商类型
+      const isGrokApi = llmApiUrl.includes('grok') || llmApiUrl.includes('xai');
+      const isOllamaApi = llmApiUrl.includes('ollama') || llmApiUrl.includes('11434');
+      const isDeepSeekApi = llmApiUrl.includes('deepseek');
+      
+      // 准备请求体
+      let requestBody: Record<string, unknown>;
+      let isOllama = false;
+      
+      const fullPrompt = `${prompt}\n\n原文：\n${text}`;
+      
+      if (isOllamaApi) {
+        // Ollama API格式
+        requestBody = {
+          model: model || 'llama2',
+          prompt: fullPrompt,
+          stream: false
+        };
+        isOllama = true;
+      } else if (isGrokApi) {
+        // Grok API格式
+        requestBody = {
+          messages: [
+            { role: 'user', content: fullPrompt }
+          ],
+          model: model || "grok-2-latest",
+          temperature: 0.7,
+          stream: false
+        };
+      } else if (isDeepSeekApi) {
+        // DeepSeek API格式
+        requestBody = {
+          model: model || 'deepseek-chat',
+          messages: [
+            { role: 'user', content: fullPrompt }
+          ],
+          temperature: 0.7,
+          stream: false
+        };
+      } else {
+        // OpenAI兼容格式（默认）
+        requestBody = {
+          model: model || 'gpt-4',
+          messages: [
+            { role: 'user', content: fullPrompt }
+          ],
+          temperature: 0.7
+        };
+      }
+      
+      // 准备请求头
+      const headers: Record<string, string> = {
+        'Content-Type': 'application/json',
+      };
+      
+      // 如果不是Ollama，添加授权头
+      if (!isOllamaApi && llmApiKey) {
+        headers['Authorization'] = `Bearer ${llmApiKey}`;
+      }
+      
+      // 使用代理API避免CORS问题
+      const proxyResponse = await fetch('/api/proxy', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          targetUrl: llmApiUrl,
+          headers,
+          body: requestBody,
+          isOllama
+        })
+      });
+      
+      if (!proxyResponse.ok) {
+        const errorData = await proxyResponse.json().catch(() => ({ 
+          error: { message: `代理服务错误: ${proxyResponse.status}` } 
+        }));
+        throw new Error(errorData.error?.message || `代理服务错误: ${proxyResponse.status}`);
+      }
+      
+      const data = await proxyResponse.json();
+      
+      // 尝试不同方式提取内容
+      let content = '';
+      
+      if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
+        content = data.choices[0].message.content;
+      } else if (data.message && data.message.content) {
+        content = data.message.content;
+      } else if (data.content) {
+        content = data.content;
+      } else if (data.output) {
+        content = data.output;
+      } else if (data.response) {
+        content = data.response;
+      } else if (data.text) {
+        content = data.text;
+      } else if (typeof data === 'string') {
+        content = data;
+      } else if (data.error) {
+        throw new Error(`API 错误: ${data.error.message || JSON.stringify(data.error)}`);
+      } else {
+        throw new Error(`无法从API响应中提取内容: ${JSON.stringify(data)}`);
+      }
+      
+      return { content };
+    } catch (error) {
+      console.error('API请求错误:', error);
+      return {
+        content: '',
+        error: error instanceof Error ? error.message : '未知错误'
+      };
+    }
+  }
+
+  // 处理提交
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    
+    if (!content.trim()) return;
+    
+    setLoading(true);
+    setResult('');
+    setError(null);
+    setApiResponseDetails(null);
+    
+    try {
+      // 检查 API 密钥
+      if (apiProvider !== 'ollama' && !llmApiKey) {
+        throw new Error(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : apiProvider === 'deepseek' ? 'DeepSeek' : '自定义'} API 需要提供有效的 API 密钥`);
+      }
+
+      const promptText = getSelectedPromptText();
+      
+      // 调用API生成内容
+      const response = await getContentFromApi(promptText, content);
+      
+      if (response.error) {
+        setError(response.error);
+        setApiResponseDetails('请查看浏览器控制台以获取更多错误详情。');
+      } else if (!response.content || response.content.trim() === '') {
+        setError('API 返回了空内容。这可能是由于 API 响应格式不符合预期。');
+        setApiResponseDetails('请尝试切换 API 提供商或检查 API 密钥和 URL 是否正确。');
+      } else {
+        setResult(response.content);
+      }
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : '处理文本时发生未知错误';
+      setError(errorMessage);
+      
+      // 添加更多帮助信息
+      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('网络')) {
+        setApiResponseDetails('这可能是由于网络连接问题或 CORS 限制导致的。请确保您的网络连接稳定，并且 API 服务允许从您的网站发出请求。');
+      } else if (errorMessage.includes('认证') || errorMessage.includes('授权') || errorMessage.includes('auth') || errorMessage.includes('key')) {
+        setApiResponseDetails('这可能是由于 API 密钥不正确或已过期。请检查您的 API 密钥并确保它有效。');
+      } else {
+        setApiResponseDetails('请检查浏览器控制台以获取更多错误详情，或尝试使用不同的 API 提供商。');
+      }
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  return (
+    <FeatureLayout
+      title="AI 文本优化器"
+      subtitle="去除AI文本特征，使内容更自然、更人性化"
+    >
+      <div className="bg-white rounded-lg shadow-sm overflow-hidden">
+        <div className="p-6">
+          <div className="mb-6 bg-blue-50 text-blue-800 p-4 rounded-md border border-blue-200">
+            <h3 className="text-lg font-medium mb-2 flex items-center">
+              <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+              </svg>
+              <span>AI检测原理与对抗技术</span>
+            </h3>
+            <div className="text-sm space-y-2">
+              <p>为了有效应对<strong>GPTZero</strong>等AI检测器，默认已选择&quot;统计特征对抗&quot;预设，该预设专门针对AI检测器使用的统计学特征进行优化。</p>
+              <p className="font-medium mt-2">主要对抗两项关键指标:</p>
+              <ul className="list-disc pl-5 space-y-1">
+                <li><strong>困惑度 (Perplexity)</strong>: 衡量文本的不可预测性。人类写作通常具有较高的困惑度，因为人类的词汇选择更具创造性和不可预测性。AI检测器会将低困惑度文本标记为AI生成。</li>
+                <li><strong>突发性 (Burstiness)</strong>: 衡量句子长度和结构的变化程度。人类写作的句子长度变化更大，从极短句到复杂长句不等，而AI生成内容往往句子长度更为均匀。</li>
+              </ul>
+              <p className="mt-2">我们的优化技术基于最新研究，通过扰乱统计特征分布、打破句长模式、调整信息熵和模拟个性化语义嵌入等方法，帮助文本逃避检测，同时保持内容质量。</p>
+            </div>
+          </div>
+          <form onSubmit={handleSubmit} className="space-y-6">
+            {/* API 设置部分 */}
+            <ApiSettings 
+              showSettings={showApiSettings}
+              toggleSettings={toggleApiSettings}
+              apiProvider={apiProvider}
+              setApiProvider={(provider) => {
+                setApiProvider(provider);
+                if (provider === 'openai') {
+                  setLlmApiUrl('https://api.openai.com/v1/chat/completions');
+                  setModel('gpt-4');
+                } else if (provider === 'grok') {
+                  setLlmApiUrl('https://api.x.ai/v1/chat/completions');
+                  setModel('grok-2-latest');
+                } else if (provider === 'ollama') {
+                  setLlmApiUrl('http://localhost:11434/api/generate');
+                  setModel('llama2');
+                  setLlmApiKey('');
+                } else if (provider === 'deepseek') {
+                  setLlmApiUrl('https://api.deepseek.com/v1/chat/completions');
+                  setModel('deepseek-chat');
+                }
+                setError(null);
+                setApiResponseDetails(null);
+              }}
+              apiUrl={llmApiUrl}
+              setApiUrl={setLlmApiUrl}
+              apiKey={llmApiKey}
+              setApiKey={setLlmApiKey}
+              model={model}
+              setModel={setModel}
+              availableModels={availableModels}
+              fetchModels={fetchOllamaModels}
+            />
+
+            <div>
+              <label className="block text-sm font-medium text-gray-700 mb-2">
+                输入需要处理的文本
+              </label>
+              <textarea
+                rows={8}
+                className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                placeholder="请粘贴需要去除AI特征的文本..."
+                value={content}
+                onChange={(e) => setContent(e.target.value)}
+                required
+              />
+            </div>
+
+            <div className="space-y-4">
+              <div className="flex items-center justify-between">
+                <h3 className="text-md font-medium text-gray-900">洗稿指令</h3>
+                <div className="flex items-center">
+                  <input
+                    type="checkbox"
+                    id="useCustom"
+                    checked={useCustomPrompt}
+                    onChange={(e) => setUseCustomPrompt(e.target.checked)}
+                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                  />
+                  <label htmlFor="useCustom" className="ml-2 text-sm text-gray-600">
+                    使用自定义指令
+                  </label>
+                </div>
+              </div>
+
+              {!useCustomPrompt ? (
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">选择优化预设</label>
+                  <div className="grid grid-cols-1 gap-2">
+                    {presetPrompts.map((preset) => (
+                      <div 
+                        key={preset.id} 
+                        className={`border rounded-md p-3 cursor-pointer transition-colors ${
+                          selectedPromptId === preset.id 
+                            ? 'bg-blue-50 border-blue-500' 
+                            : 'hover:bg-gray-50 border-gray-200'
+                        }`}
+                        onClick={() => setSelectedPromptId(preset.id)}
+                      >
+                        <div className="font-medium">{preset.name}</div>
+                        {selectedPromptId === preset.id && preset.id === 'human-writing' && (
+                          <div className="mt-2 text-xs text-gray-500">
+                            全面的人类写作特征优化方案，包含语言变化、思维过程、文化特征、修辞多样性、结构逻辑、情感语气等七大方面的优化策略
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ) : (
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    自定义指令
+                  </label>
+                  <textarea
+                    rows={4}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500"
+                    placeholder="请输入自定义的洗稿指令..."
+                    value={customPrompt}
+                    onChange={(e) => setCustomPrompt(e.target.value)}
+                    required={useCustomPrompt}
+                  />
+                  <p className="mt-1 text-xs text-gray-500">
+                    提示：优质的指令应明确说明如何改进文本、需要保留哪些内容以及需要什么风格。
+                  </p>
+                </div>
+              )}
+            </div>
+
+            <div className="flex justify-end">
+              <button
+                type="submit"
+                disabled={loading || !content.trim() || (useCustomPrompt && !customPrompt.trim()) || (apiProvider !== 'ollama' && !llmApiKey)}
+                className={`px-4 py-2 rounded-md text-white font-medium ${
+                  loading || !content.trim() || (useCustomPrompt && !customPrompt.trim()) || (apiProvider !== 'ollama' && !llmApiKey)
+                    ? 'bg-indigo-300 cursor-not-allowed'
+                    : 'bg-indigo-600 hover:bg-indigo-700'
+                }`}
+              >
+                {loading ? '处理中...' : '优化文本'}
+              </button>
+            </div>
+          </form>
+
+          {error && (
+            <div className="mt-4 bg-red-50 text-red-800 p-3 rounded-md border border-red-200">
+              <p className="text-sm flex items-center">
+                <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-2" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+                </svg>
+                <span>{error}</span>
+              </p>
+            </div>
+          )}
+
+          {result && (
+            <div className="mt-6">
+              <h3 className="text-lg font-medium mb-2">优化结果</h3>
+              <div className="bg-gray-50 p-4 rounded-md border border-gray-200">
+                <div className="whitespace-pre-wrap">{result}</div>
+                <div className="mt-4 flex justify-end">
+                  <button
+                    type="button"
+                    className="inline-flex items-center px-3 py-1.5 border border-gray-300 text-xs font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                    onClick={() => {
+                      navigator.clipboard.writeText(result);
+                      alert('已复制到剪贴板');
+                    }}
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                    </svg>
+                    复制结果
+                  </button>
+                </div>
+              </div>
+              {apiResponseDetails && (
+                <div className="mt-4">
+                  <details className="text-sm text-gray-600">
+                    <summary className="cursor-pointer hover:text-gray-900">查看技术细节</summary>
+                    <div className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200 overflow-auto">
+                      <pre className="text-xs">{apiResponseDetails}</pre>
+                    </div>
+                  </details>
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </FeatureLayout>
+  );
+} 

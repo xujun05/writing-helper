@@ -48,8 +48,8 @@ alwaysApply: false
 
 # Additional Resources
 
-- [Next.js Documentation](https://nextjs.org/docs)
-- [TypeScript Handbook](https://www.typescriptlang.org/docs/)
-- [Tailwind CSS Documentation](https://tailwindcss.com/docs)
-- [React Documentation](https://reactjs.org/docs/getting-started.html)
-- [Autonomys Overview](https://autonomys.xyz/)
+- [Next.js Documentation](mdc:https:/nextjs.org/docs)
+- [TypeScript Handbook](mdc:https:/www.typescriptlang.org/docs)
+- [Tailwind CSS Documentation](mdc:https:/tailwindcss.com/docs)
+- [React Documentation](mdc:https:/reactjs.org/docs/getting-started.html)
+- [Autonomys Overview](mdc:https:/autonomys.xyz)
