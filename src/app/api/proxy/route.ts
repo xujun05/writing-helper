@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 
-// 设置最大执行时间为 60 秒
-export const maxDuration = 60;
+// 设置最大执行时间为 600 秒（10分钟 这里要考虑是否改成 SSE）
+export const maxDuration = 600; // 增加到10分钟
 
 // 添加 CORS 配置
 export async function OPTIONS() {
@@ -41,7 +41,7 @@ export async function POST(request: NextRequest) {
     try {
       // 发起请求到目标 API，添加超时设置
       const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 300000); // 5分钟超时
+      const timeoutId = setTimeout(() => controller.abort(), 600000); // 10分钟超时
 
       // 根据是否是 Ollama 请求调整请求体格式
       const requestBody = isOllama ? {
