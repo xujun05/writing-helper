@@ -48,7 +48,7 @@ const presetPrompts = [
    - 如果是新闻稿，模拟特定媒体的风格和报道角度
    - 如果是创意写作，展现个人化的写作风格和叙事技巧
 
-请根据以上原则重写以下文本，确保文本既专业准确又具有自然的人类表达特征。`
+请根据以上原则重写以下文本，确保文本既专业准确又具有自然的人类表达特征。仅输出正文，不要输出任何解释或说明。`
   },
   {
     id: 'ai-guide',
@@ -355,7 +355,7 @@ export default function AIRewritePage() {
               <span>AI检测原理与对抗技术</span>
             </h3>
             <div className="text-sm space-y-2">
-              <p>为了有效应对<strong>GPTZero</strong>等AI检测器，默认已选择&quot;统计特征对抗&quot;预设，该预设专门针对AI检测器使用的统计学特征进行优化。</p>
+              <p>为了有效应对<strong>GPTZero</strong>等AI检测器，默认已选择&quot;人类写作特征优化&quot;预设，该预设专门针对AI检测器使用的统计学特征进行优化。</p>
               <p className="font-medium mt-2">主要对抗两项关键指标:</p>
               <ul className="list-disc pl-5 space-y-1">
                 <li><strong>困惑度 (Perplexity)</strong>: 衡量文本的不可预测性。人类写作通常具有较高的困惑度，因为人类的词汇选择更具创造性和不可预测性。AI检测器会将低困惑度文本标记为AI生成。</li>
