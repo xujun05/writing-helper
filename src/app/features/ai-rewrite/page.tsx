@@ -70,8 +70,37 @@ const presetPrompts = [
 4. **提供改写示例**：给出2-3个具体的改写示例，展示如何应用上述策略。
 
 请确保生成的策略简洁明了，易于应用，并能有效减少AI检测率。`
+  },
+  {
+    id: 'hybrid-mode',
+    name: '分析+改写混合模式',
+    description: '先分析文本AI特征并生成针对性策略，再根据这些策略进行全文改写，提供更加个性化和有针对性的优化结果',
+    prompt: `请执行以下两阶段处理，以优化文本并减少AI特征：
 
+【第一阶段：分析与策略制定】
+首先，请分析以下内容，并生成去除AI特征的策略：
 
+===原文开始===
+{text}
+===原文结束===
+
+请提供以下分析：
+1. 文本整体风格特点概述
+2. 识别出的主要AI特征（如句式规律、词汇选择模式、结构特点等）
+3. 针对性的改写策略（至少5条具体的改进方向）
+
+【第二阶段：全文改写】
+现在，请根据上述制定的策略，对原文进行全面改写。改写时请注意：
+- 保持原文的主要信息和观点
+- 应用上述策略中提出的改进方向
+- 增加语言的自然性和人类特征，包括：
+  * 加入适当的主观表达和个人观点
+  * 使用更多样化的句式和段落长度
+  * 引入一些口语化或非正式表达
+  * 适当增加情感色彩和语气变化
+  * 打破过于规整的结构和逻辑展开
+
+请直接输出改写后的文本，不需要包含分析过程或策略说明。`
   }
 ];
 
@@ -93,6 +122,8 @@ export default function AIRewritePage() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [apiResponseDetails, setApiResponseDetails] = useState<string | null>(null);
+  const [useTwoStepMode, setUseTwoStepMode] = useState(false);
+  const [processingStep, setProcessingStep] = useState<string | null>(null);
 
   // API 设置状态
   const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
@@ -174,7 +205,7 @@ export default function AIRewritePage() {
   };
 
   // 直接从API获取内容
-  async function getContentFromApi(prompt: string, text: string): Promise<ApiResponse> {
+  const getContentFromApi = async (prompt: string, text: string): Promise<ApiResponse> => {
     try {
       // 检测API提供商类型
       const isGrokApi = llmApiUrl.includes('grok') || llmApiUrl.includes('xai');
@@ -185,7 +216,9 @@ export default function AIRewritePage() {
       let requestBody: Record<string, unknown>;
       let isOllama = false;
 
-      const fullPrompt = `${prompt}\n\n原文：\n${text}`;
+      const fullPrompt = prompt.includes('{text}') 
+        ? prompt.replace('{text}', text)
+        : `${prompt}\n\n原文：\n${text}`;
 
       if (isOllamaApi) {
         // Ollama API格式
@@ -290,7 +323,7 @@ export default function AIRewritePage() {
         error: error instanceof Error ? error.message : '未知错误'
       };
     }
-  }
+  };
 
   // 处理提交
   const handleSubmit = async (e: React.FormEvent) => {
@@ -309,19 +342,70 @@ export default function AIRewritePage() {
         throw new Error(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : apiProvider === 'deepseek' ? 'DeepSeek' : '自定义'} API 需要提供有效的 API 密钥`);
       }
 
+      // 获取所选提示词文本
       const promptText = getSelectedPromptText();
+      
+      // 如果启用了两步处理模式
+      if (useTwoStepMode && selectedPromptId === 'human-writing') {
+        // 第一步：使用AI修改指导获取策略
+        setProcessingStep('正在分析文本并生成优化策略...');
+        
+        // 获取AI修改指导的prompt
+        const aiGuidePrompt = presetPrompts.find(p => p.id === 'ai-guide')?.prompt || '';
+        
+        // 调用API获取修改策略
+        const strategiesResponse = await getContentFromApi(aiGuidePrompt, content);
+        
+        if (strategiesResponse.error) {
+          throw new Error(`生成策略失败: ${strategiesResponse.error}`);
+        }
+        
+        // 第二步：使用生成的策略作为指导，应用人类写作特征优化
+        setProcessingStep('正在根据策略优化文本...');
+        
+        // 构建新的prompt，结合策略和人类写作特征
+        const humanWritingPrompt = presetPrompts.find(p => p.id === 'human-writing')?.prompt || '';
+        
+        const combinedPrompt = `
+${humanWritingPrompt}
 
-      // 调用API生成内容
-      const response = await getContentFromApi(promptText, content);
+同时，请特别注意以下针对此文本的具体优化策略：
 
-      if (response.error) {
-        setError(response.error);
-        setApiResponseDetails('请查看浏览器控制台以获取更多错误详情。');
-      } else if (!response.content || response.content.trim() === '') {
-        setError('API 返回了空内容。这可能是由于 API 响应格式不符合预期。');
-        setApiResponseDetails('请尝试切换 API 提供商或检查 API 密钥和 URL 是否正确。');
+${strategiesResponse.content}
+
+请根据以上策略和原则重写文本，确保文本既包含原文的核心信息，又具有自然的人类表达特征。仅输出优化后的文本，不要包含策略分析或说明。
+        `.trim();
+        
+        // 使用组合prompt调用API
+        const finalResponse = await getContentFromApi(combinedPrompt, content);
+        
+        if (finalResponse.error) {
+          throw new Error(`文本优化失败: ${finalResponse.error}`);
+        }
+        
+        setResult(finalResponse.content);
+        
+        // 记录策略详情以便查看
+        setApiResponseDetails(`
+【第一步：优化策略生成】
+${strategiesResponse.content}
+
+【第二步：根据策略进行优化】
+已使用上述策略优化文本。
+        `.trim());
       } else {
-        setResult(response.content);
+        // 常规处理 - 单步模式
+        const response = await getContentFromApi(promptText, content);
+        
+        if (response.error) {
+          setError(response.error);
+          setApiResponseDetails('请查看浏览器控制台以获取更多错误详情。');
+        } else if (!response.content || response.content.trim() === '') {
+          setError('API 返回了空内容。这可能是由于 API 响应格式不符合预期。');
+          setApiResponseDetails('请尝试切换 API 提供商或检查 API 密钥和 URL 是否正确。');
+        } else {
+          setResult(response.content);
+        }
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '处理文本时发生未知错误';
@@ -337,6 +421,7 @@ export default function AIRewritePage() {
       }
     } finally {
       setLoading(false);
+      setProcessingStep(null);
     }
   };
 
@@ -416,17 +501,39 @@ export default function AIRewritePage() {
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <h3 className="text-md font-medium text-gray-900">洗稿指令</h3>
-                <div className="flex items-center">
-                  <input
-                    type="checkbox"
-                    id="useCustom"
-                    checked={useCustomPrompt}
-                    onChange={(e) => setUseCustomPrompt(e.target.checked)}
-                    className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
-                  />
-                  <label htmlFor="useCustom" className="ml-2 text-sm text-gray-600">
-                    使用自定义指令
-                  </label>
+                <div className="flex items-center space-x-4">
+                  {selectedPromptId === 'human-writing' && (
+                    <div className="flex items-center">
+                      <input
+                        type="checkbox"
+                        id="useTwoStep"
+                        checked={useTwoStepMode}
+                        onChange={(e) => setUseTwoStepMode(e.target.checked)}
+                        className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                      />
+                      <label htmlFor="useTwoStep" className="ml-2 text-sm text-gray-600">
+                        使用两步优化（先分析再优化）
+                      </label>
+                    </div>
+                  )}
+                  
+                  <div className="flex items-center">
+                    <input
+                      type="checkbox"
+                      id="useCustom"
+                      checked={useCustomPrompt}
+                      onChange={(e) => {
+                        setUseCustomPrompt(e.target.checked);
+                        if (e.target.checked) {
+                          setUseTwoStepMode(false);
+                        }
+                      }}
+                      className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+                    />
+                    <label htmlFor="useCustom" className="ml-2 text-sm text-gray-600">
+                      使用自定义指令
+                    </label>
+                  </div>
                 </div>
               </div>
 
@@ -441,7 +548,12 @@ export default function AIRewritePage() {
                             ? 'bg-blue-50 border-blue-500'
                             : 'hover:bg-gray-50 border-gray-200'
                           }`}
-                        onClick={() => setSelectedPromptId(preset.id)}
+                        onClick={() => {
+                          setSelectedPromptId(preset.id);
+                          if (preset.id !== 'human-writing') {
+                            setUseTwoStepMode(false);
+                          }
+                        }}
                       >
                         <div className="font-medium">{preset.name}</div>
                         <div className="mt-2 text-xs text-gray-500">
@@ -450,6 +562,14 @@ export default function AIRewritePage() {
                       </div>
                     ))}
                   </div>
+                  
+                  {useTwoStepMode && (
+                    <div className="mt-3 p-3 bg-yellow-50 border border-yellow-200 rounded-md">
+                      <p className="text-xs text-yellow-800">
+                        <strong>两步优化模式:</strong> 系统将先使用AI修改指导分析文本并生成个性化优化策略，然后根据这些策略使用人类写作特征优化模式改写文本。这种方式需要两次API调用，但能产生更有针对性的优化结果。
+                      </p>
+                    </div>
+                  )}
                 </div>
               ) : (
                 <div>
@@ -480,7 +600,7 @@ export default function AIRewritePage() {
                     : 'bg-indigo-600 hover:bg-indigo-700'
                   }`}
               >
-                {loading ? '处理中...' : '优化文本'}
+                {loading ? (processingStep || '处理中...') : '优化文本'}
               </button>
             </div>
           </form>
@@ -520,9 +640,9 @@ export default function AIRewritePage() {
               {apiResponseDetails && (
                 <div className="mt-4">
                   <details className="text-sm text-gray-600">
-                    <summary className="cursor-pointer hover:text-gray-900">查看技术细节</summary>
+                    <summary className="cursor-pointer hover:text-gray-900">{useTwoStepMode ? '查看优化策略和处理详情' : '查看技术细节'}</summary>
                     <div className="mt-2 p-3 bg-gray-50 rounded-md border border-gray-200 overflow-auto">
-                      <pre className="text-xs">{apiResponseDetails}</pre>
+                      <pre className="text-xs whitespace-pre-wrap">{apiResponseDetails}</pre>
                     </div>
                   </details>
                 </div>
