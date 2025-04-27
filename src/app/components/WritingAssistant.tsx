@@ -197,7 +197,7 @@ export default function WritingAssistant() {
     
     // 根据提供商设置默认模型
     if (provider === 'grok') {
-      setModel('grok-2-latest');
+      setModel('grok-3-latest');
     } else if (provider === 'ollama') {
       setModel('llama2');
       // 清空 API Key，因为 Ollama 不需要
@@ -363,7 +363,7 @@ export default function WritingAssistant() {
                           setModel('gpt-4');
                         } else if (provider === 'grok') {
                           setLlmApiUrl('https://api.grok.ai/v1/chat/completions');
-                          setModel('grok-2-latest');
+                          setModel('grok-3-latest');
                         } else if (provider === 'ollama') {
                           setLlmApiUrl('http://localhost:11434/api/generate');  // 确保使用 /api/generate 端点
                           setModel('llama2');

@@ -377,7 +377,7 @@ export default function WechatFormatter() {
       } else if (isGrokApi) {
         requestBody = {
           messages: [{ role: 'user', content: prompt }],
-          model: model || 'grok-2-latest',
+          model: model || 'grok-3-latest',
           temperature: 0.7,
           stream: false
         };
@@ -696,7 +696,7 @@ export default function WechatFormatter() {
                       setModel('gpt-4');
                     } else if (provider === 'grok') {
                       setApiUrl('https://api.x.ai/v1/chat/completions');
-                      setModel('grok-2-latest');
+                      setModel('grok-3-latest');
                     } else if (provider === 'ollama') {
                       setApiUrl('http://localhost:11434/api/generate');
                       setModel('llama2');

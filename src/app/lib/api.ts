@@ -39,7 +39,7 @@ export async function generateContent(request: WritingRequest): Promise<ApiRespo
             content: promptTemplate
           }
         ],
-        model: "grok-2-latest",
+        model: "grok-3-latest",
         temperature: 0.7,
         stream: false
       };
@@ -295,7 +295,7 @@ ${originalText}
             content: promptTemplate
           }
         ],
-        model: "grok-2-latest",
+        model: "grok-3-latest",
         temperature: 0.7,
         stream: false
       };

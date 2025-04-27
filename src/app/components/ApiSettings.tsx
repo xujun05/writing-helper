@@ -69,7 +69,7 @@ export default function ApiSettings({
     if (provider === 'openai') {
       setModel('gpt-4');
     } else if (provider === 'grok') {
-      setModel('grok-2-latest');
+      setModel('grok-3-latest');
     } else if (provider === 'ollama') {
       // 对于 Ollama，尝试获取可用模型
       setModel('llama2'); // 设置默认值，即使没有获取到模型列表也能有默认值

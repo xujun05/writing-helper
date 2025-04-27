@@ -462,7 +462,7 @@ export default function GrokTest() {
       "content": "Testing. Just say hi and hello world and nothing else."
     }
   ],
-  "model": "grok-2-latest",
+  "model": "grok-3-latest",
   "stream": false,
   "temperature": 0
 }'`}

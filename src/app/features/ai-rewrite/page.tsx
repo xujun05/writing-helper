@@ -347,7 +347,7 @@ export default function AIRewritePage() {
           messages: [
             { role: 'user', content: fullPrompt }
           ],
-          model: model || "grok-2-latest",
+          model: model || "grok-3-latest",
           temperature: 0.7,
           stream: false
         };
@@ -575,7 +575,7 @@ ${strategiesResponse.content}
                   setModel('gpt-4');
                 } else if (provider === 'grok') {
                   setLlmApiUrl('https://api.x.ai/v1/chat/completions');
-                  setModel('grok-2-latest');
+                  setModel('grok-3-latest');
                 } else if (provider === 'ollama') {
                   setLlmApiUrl('http://localhost:11434/api/generate');
                   setModel('llama2');

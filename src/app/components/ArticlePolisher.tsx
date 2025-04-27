@@ -130,7 +130,7 @@ export default function ArticlePolisher() {
       // 根据API提供商选择不同的模型
       const model = apiProvider === 'ollama' ? ollamaModel : 
                     apiProvider === 'openai' ? 'gpt-4' : 
-                    apiProvider === 'grok' ? 'grok-2-latest' : 
+                    apiProvider === 'grok' ? 'grok-3-latest' : 
                     apiProvider === 'deepseek' ? 'deepseek-chat' : '';
 
       const request: PolishRequest = {
@@ -200,7 +200,7 @@ export default function ArticlePolisher() {
                 }}
                 apiKey={apiKey}
                 setApiKey={setApiKey}
-                model={apiProvider === 'ollama' ? ollamaModel : apiProvider === 'openai' ? 'gpt-4' : apiProvider === 'grok' ? 'grok-2-latest' : apiProvider === 'deepseek' ? 'deepseek-chat' : ''}
+                model={apiProvider === 'ollama' ? ollamaModel : apiProvider === 'openai' ? 'gpt-4' : apiProvider === 'grok' ? 'grok-3-latest' : apiProvider === 'deepseek' ? 'deepseek-chat' : ''}
                 setModel={(model) => {
                   if (apiProvider === 'ollama') {
                     setOllamaModel(model);
