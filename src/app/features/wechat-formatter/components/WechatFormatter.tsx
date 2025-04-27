@@ -286,6 +286,16 @@ export default function WechatFormatter() {
   const [model, setModel] = useState<string>('gpt-4');
   const [availableModels, setAvailableModels] = useState<string[]>([]);
 
+  // 添加Markdown语法示例/帮助
+  const [showMarkdownHelp, setShowMarkdownHelp] = useState<boolean>(false);
+  // 添加表格生成器状态
+  const [showTableGenerator, setShowTableGenerator] = useState<boolean>(false);
+  const [tableRows, setTableRows] = useState<number>(3);
+  const [tableCols, setTableCols] = useState<number>(3);
+  // 添加编辑历史记录状态
+  const [markdownHistory, setMarkdownHistory] = useState<string[]>([]);
+  const [currentHistoryIndex, setCurrentHistoryIndex] = useState<number>(-1);
+
   // API 设置切换
   const toggleApiSettings = () => {
     setShowApiSettings(!showApiSettings);
@@ -568,6 +578,176 @@ export default function WechatFormatter() {
     };
   }, [markdown]); // 当内容变化时重新调整高度
 
+  // 创建自定义表格
+  const generateTable = () => {
+    if (!textareaRef.current) return;
+    
+    const headerRow = Array(tableCols).fill('').map((_, i) => `表头${i+1}`).join(' | ');
+    const separatorRow = Array(tableCols).fill('-----').join(' | ');
+    const contentRows = Array(tableRows).fill('').map((_, rowIdx) => {
+      return Array(tableCols).fill('').map((_, colIdx) => `内容${rowIdx*tableCols+colIdx+1}`).join(' | ');
+    }).join('\n| ');
+    
+    const tableMarkdown = `
+| ${headerRow} |
+| ${separatorRow} |
+| ${contentRows} |
+`;
+    
+    insertMarkdown('customtable', tableMarkdown);
+    setShowTableGenerator(false);
+  };
+
+  // 添加撤销功能
+  const undoEdit = () => {
+    if (currentHistoryIndex > 0) {
+      const newIndex = currentHistoryIndex - 1;
+      setCurrentHistoryIndex(newIndex);
+      setMarkdown(markdownHistory[newIndex]);
+    }
+  };
+
+  // 保存编辑历史
+  const saveHistory = (newText: string) => {
+    // 如果当前不是历史记录的最后一个，截断历史记录
+    if (currentHistoryIndex < markdownHistory.length - 1) {
+      const newHistory = markdownHistory.slice(0, currentHistoryIndex + 1);
+      setMarkdownHistory([...newHistory, newText]);
+    } else {
+      // 否则直接添加到历史记录
+      setMarkdownHistory([...markdownHistory, newText]);
+    }
+    setCurrentHistoryIndex(markdownHistory.length);
+  };
+
+  // 扩展insertMarkdown函数以支持自定义表格
+  const insertMarkdown = (type: string, customContent?: string) => {
+    if (!textareaRef.current) return;
+    
+    const textarea = textareaRef.current;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selectedText = textarea.value.substring(start, end);
+    const beforeText = textarea.value.substring(0, start);
+    const afterText = textarea.value.substring(end);
+    
+    let insertion = '';
+    
+    switch(type) {
+      case 'bold':
+        insertion = `**${selectedText || '加粗文字'}**`;
+        break;
+      case 'italic':
+        insertion = `*${selectedText || '斜体文字'}*`;
+        break;
+      case 'heading1':
+        insertion = `\n# ${selectedText || '一级标题'}\n`;
+        break;
+      case 'heading2':
+        insertion = `\n## ${selectedText || '二级标题'}\n`;
+        break;
+      case 'heading3':
+        insertion = `\n### ${selectedText || '三级标题'}\n`;
+        break;
+      case 'heading4':
+        insertion = `\n#### ${selectedText || '四级标题'}\n`;
+        break;
+      case 'heading5':
+        insertion = `\n##### ${selectedText || '五级标题'}\n`;
+        break;
+      case 'link':
+        insertion = `[${selectedText || '链接文字'}](https://example.com)`;
+        break;
+      case 'image':
+        insertion = `![${selectedText || '图片描述'}](https://example.com/image.jpg)`;
+        break;
+      case 'code':
+        insertion = selectedText ? `\`${selectedText}\`` : '`代码`';
+        break;
+      case 'codeblock':
+        insertion = selectedText ? 
+          `\n\`\`\`\n${selectedText}\n\`\`\`\n` : 
+          '\n```\n// 在此处输入代码\n```\n';
+        break;
+      case 'quote':
+        // 处理多行引用
+        if (selectedText.includes('\n')) {
+          const lines = selectedText.split('\n');
+          insertion = '\n' + lines.map(line => `> ${line}`).join('\n') + '\n';
+        } else {
+          insertion = `\n> ${selectedText || '引用文字'}\n`;
+        }
+        break;
+      case 'list':
+        // 处理多行列表
+        if (selectedText.includes('\n')) {
+          const lines = selectedText.split('\n');
+          insertion = '\n' + lines.map(line => `- ${line}`).join('\n') + '\n';
+        } else {
+          insertion = `\n- ${selectedText || '列表项'}\n`;
+        }
+        break;
+      case 'orderedlist':
+        // 处理多行有序列表
+        if (selectedText.includes('\n')) {
+          const lines = selectedText.split('\n');
+          insertion = '\n' + lines.map((line, i) => `${i+1}. ${line}`).join('\n') + '\n';
+        } else {
+          insertion = `\n1. ${selectedText || '有序列表项'}\n`;
+        }
+        break;
+      case 'table':
+        setShowTableGenerator(true);
+        return;
+      case 'customtable':
+        insertion = customContent || '';
+        break;
+      case 'hr':
+        insertion = '\n\n---\n\n';
+        break;
+    }
+    
+    const newText = beforeText + insertion + afterText;
+    
+    // 保存到历史记录
+    saveHistory(textarea.value);
+    
+    setMarkdown(newText);
+    
+    // 重新聚焦并设置光标位置
+    setTimeout(() => {
+      textarea.focus();
+      const newCursorPos = start + insertion.length;
+      textarea.setSelectionRange(newCursorPos, newCursorPos);
+    }, 0);
+  };
+
+  // 添加Markdown语法示例/帮助
+  const markdownHelpContent = (
+    <div className="bg-white border border-gray-200 rounded-md p-4 mt-2 text-sm shadow-md">
+      <h4 className="font-medium text-gray-800 mb-2">Markdown 语法参考</h4>
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+        <div>
+          <p className="text-gray-700 mb-1"><code className="bg-gray-100 px-1 py-0.5 rounded"># 标题</code> - 一级标题</p>
+          <p className="text-gray-700 mb-1"><code className="bg-gray-100 px-1 py-0.5 rounded">## 标题</code> - 二级标题</p>
+          <p className="text-gray-700 mb-1"><code className="bg-gray-100 px-1 py-0.5 rounded">**文字**</code> - <strong>加粗文字</strong></p>
+          <p className="text-gray-700 mb-1"><code className="bg-gray-100 px-1 py-0.5 rounded">*文字*</code> - <em>斜体文字</em></p>
+          <p className="text-gray-700 mb-1"><code className="bg-gray-100 px-1 py-0.5 rounded">~~文字~~</code> - <del>删除线</del></p>
+        </div>
+        <div>
+          <p className="text-gray-700 mb-1"><code className="bg-gray-100 px-1 py-0.5 rounded">[链接](URL)</code> - 链接</p>
+          <p className="text-gray-700 mb-1"><code className="bg-gray-100 px-1 py-0.5 rounded">![描述](图片URL)</code> - 图片</p>
+          <p className="text-gray-700 mb-1"><code className="bg-gray-100 px-1 py-0.5 rounded">- 项目</code> - 无序列表</p>
+          <p className="text-gray-700 mb-1"><code className="bg-gray-100 px-1 py-0.5 rounded">1. 项目</code> - 有序列表</p>
+          <p className="text-gray-700 mb-1"><code className="bg-gray-100 px-1 py-0.5 rounded">{`>`} 引用</code> - 引用文本</p>
+        </div>
+      </div>
+      <div className="mt-2 text-xs text-gray-600">
+        <p>点击上方工具栏按钮可快速插入对应格式</p>
+      </div>
+    </div>
+  );
+
   return (
     <div className="bg-white rounded-lg shadow-sm overflow-hidden">
       <div className="p-6">
@@ -583,12 +763,275 @@ export default function WechatFormatter() {
                   </svg>
                   Markdown 编辑
                 </h3>
+                
+                {/* Markdown 工具栏 */}
+                <div className="mb-2 flex flex-wrap gap-1 border-b border-gray-200 pb-2">
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('heading1')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="一级标题"
+                  >
+                    <span className="font-bold text-base">H1</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('heading2')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="二级标题"
+                  >
+                    <span className="font-bold text-base">H2</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('heading3')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="三级标题"
+                  >
+                    <span className="font-bold text-base">H3</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('heading4')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="四级标题"
+                  >
+                    <span className="font-bold text-base">H4</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('heading5')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="五级标题"
+                  >
+                    <span className="font-bold text-base">H5</span>
+                  </button>
+                  <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('bold')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="加粗"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M6 4h8a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
+                      <path d="M6 12h9a4 4 0 0 1 4 4 4 4 0 0 1-4 4H6z"></path>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('italic')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="斜体"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="19" y1="4" x2="10" y2="4"></line>
+                      <line x1="14" y1="20" x2="5" y2="20"></line>
+                      <line x1="15" y1="4" x2="9" y2="20"></line>
+                    </svg>
+                  </button>
+                  <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('list')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="无序列表"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="8" y1="6" x2="21" y2="6"></line>
+                      <line x1="8" y1="12" x2="21" y2="12"></line>
+                      <line x1="8" y1="18" x2="21" y2="18"></line>
+                      <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                      <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                      <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('orderedlist')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="有序列表"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="10" y1="6" x2="21" y2="6"></line>
+                      <line x1="10" y1="12" x2="21" y2="12"></line>
+                      <line x1="10" y1="18" x2="21" y2="18"></line>
+                      <path d="M4 6h1v4"></path>
+                      <path d="M4 10h2"></path>
+                      <path d="M6 18H4c0-1 2-2 2-3s-1-1.5-2-1"></path>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('quote')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="引用"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M3 8l6.697 0"></path>
+                      <path d="M3 12l6.697 0"></path>
+                      <path d="M3 16l6.697 0"></path>
+                      <path d="M17.5 16h.5c1.667 0 3-1.5 3-3 0-1.5-1.5-3-3-3h-.5"></path>
+                      <path d="M11.5 16h.5c1.667 0 3-1.5 3-3 0-1.5-1.5-3-3-3h-.5"></path>
+                    </svg>
+                  </button>
+                  <div className="h-6 w-px bg-gray-300 mx-1"></div>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('link')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="插入链接"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"></path>
+                      <path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"></path>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('image')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="插入图片"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <circle cx="8.5" cy="8.5" r="1.5"></circle>
+                      <polyline points="21 15 16 10 5 21"></polyline>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('code')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="插入代码"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <polyline points="16 18 22 12 16 6"></polyline>
+                      <polyline points="8 6 2 12 8 18"></polyline>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('codeblock')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="插入代码块"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h7"></path>
+                      <line x1="16" y1="8" x2="8" y2="16"></line>
+                      <line x1="12" y1="8" x2="8" y2="12"></line>
+                      <line x1="16" y1="12" x2="12" y2="16"></line>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('table')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="插入表格"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                      <line x1="3" y1="9" x2="21" y2="9"></line>
+                      <line x1="3" y1="15" x2="21" y2="15"></line>
+                      <line x1="9" y1="3" x2="9" y2="21"></line>
+                      <line x1="15" y1="3" x2="15" y2="21"></line>
+                    </svg>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => insertMarkdown('hr')}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded"
+                    title="插入水平线"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <line x1="5" y1="12" x2="19" y2="12"></line>
+                    </svg>
+                  </button>
+                  {/* 添加撤销按钮 */}
+                  <button
+                    type="button"
+                    onClick={undoEdit}
+                    disabled={currentHistoryIndex <= 0}
+                    className={`p-1.5 text-gray-700 hover:bg-gray-100 rounded ${currentHistoryIndex <= 0 ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    title="撤销"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                      <path d="M9 14L4 9l5-5"></path>
+                      <path d="M4 9h10.5a5.5 5.5 0 0 1 5.5 5.5v0a5.5 5.5 0 0 1-5.5 5.5H11"></path>
+                    </svg>
+                  </button>
+                  <div className="flex-grow"></div>
+                  <button
+                    type="button"
+                    onClick={() => setShowMarkdownHelp(!showMarkdownHelp)}
+                    className="p-1.5 text-gray-700 hover:bg-gray-100 rounded flex items-center"
+                    title="Markdown 帮助"
+                  >
+                    <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5 mr-1" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    <span className="text-sm">帮助</span>
+                  </button>
+                </div>
+                
+                {/* Markdown 语法帮助 */}
+                {showMarkdownHelp && markdownHelpContent}
+                
+                {/* 表格生成器对话框 */}
+                {showTableGenerator && (
+                  <div className="bg-white border border-gray-200 rounded-md p-4 my-2 shadow-md">
+                    <h4 className="font-medium text-gray-800 mb-3">创建表格</h4>
+                    <div className="grid grid-cols-2 gap-4 mb-4">
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">行数</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={tableRows}
+                          onChange={(e) => setTableRows(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">列数</label>
+                        <input
+                          type="number"
+                          min="1"
+                          max="10"
+                          value={tableCols}
+                          onChange={(e) => setTableCols(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
+                          className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+                        />
+                      </div>
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => setShowTableGenerator(false)}
+                        className="mr-2 inline-flex items-center px-3 py-2 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        取消
+                      </button>
+                      <button
+                        type="button"
+                        onClick={generateTable}
+                        className="inline-flex items-center px-3 py-2 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+                      >
+                        插入表格
+                      </button>
+                    </div>
+                  </div>
+                )}
+                
                 <textarea
                   id="markdown-editor"
                   ref={textareaRef}
                   className="w-full min-h-[400px] p-3 border rounded-md font-mono text-sm"
                   value={markdown}
                   onChange={(e) => {
+                    // 保存历史记录
+                    saveHistory(markdown);
                     setMarkdown(e.target.value);
                   }}
                   style={{ overflow: 'hidden', resize: 'none' }}
