@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import { ApiSettings, ApiProvider } from './ApiSettings';
+import ApiSettings, { ApiProvider } from './ApiSettings';
 import MarkdownEditor from './MarkdownEditor';
 import { generateContent } from '../lib/api';
 import { PromptStyle, WritingRequest, ApiResponseDetails } from '../lib/types';
-import { OPENAI_API_URL, ANTHROPIC_API_URL, OLLAMA_API_URL, GOOGLE_AI_STUDIO_URL, OPENAI_HELP_URL, ANTHROPIC_HELP_URL, OLLAMA_HELP_URL, GOOGLE_AI_STUDIO_HELP_URL } from '../lib/constants';
+import { OPENAI_API_URL, ANTHROPIC_API_URL, OLLAMA_API_URL, GOOGLE_AI_STUDIO_URL } from '../lib/constants';
 
 interface PlatformGeneratorUIProps {
   platformName: string;
