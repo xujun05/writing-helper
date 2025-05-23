@@ -1,16 +1,9 @@
 "use client";
 
 import React from 'react';
-import { Metadata } from 'next';
-import PlatformGeneratorUI from '../../../components/PlatformGeneratorUI';
-import { PromptStyle, LanguageStyle, StructureStyle, EmotionStyle, CreativeStrategy } from '../../../lib/types';
-import FeatureLayout from '../../../components/FeatureLayout';
-
-// Metadata for the page
-export const metadata: Metadata = {
-  title: "WeChat Official Account Content Generator",
-  description: "AI-powered content generation for WeChat Official Accounts.",
-};
+import PlatformGeneratorUI from '../../components/PlatformGeneratorUI';
+import { PromptStyle, LanguageStyle, StructureStyle, EmotionStyle, CreativeStrategy } from '../../lib/types';
+import FeatureLayout from '../../components/FeatureLayout';
 
 const WeChatGeneratorPage: React.FC = () => {
   const platformName = "WeChat Official Account Content Generator";

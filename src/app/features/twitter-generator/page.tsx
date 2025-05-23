@@ -1,8 +1,7 @@
 "use client";
 
 import React from 'react';
-import { Metadata } from 'next';
-import PlatformGeneratorUI from '../../../components/PlatformGeneratorUI';
+import PlatformGeneratorUI from '../../components/PlatformGeneratorUI';
 import { 
   PromptStyle, 
   LanguageStyle, 
@@ -24,14 +23,8 @@ import {
   FontStyles,
   EmphasisTechniques,
   MultimediaIntegrationOptions
-} from '../../../lib/types';
-import FeatureLayout from '../../../components/FeatureLayout';
-
-// Metadata for the page
-export const metadata: Metadata = {
-  title: "Twitter Post Generator",
-  description: "AI-powered content generation for Twitter.",
-};
+} from '../../lib/types';
+import FeatureLayout from '../../components/FeatureLayout';
 
 const TwitterGeneratorPage: React.FC = () => {
   const platformName = "Twitter Post Generator";
