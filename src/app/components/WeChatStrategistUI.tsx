@@ -7,38 +7,34 @@ import { generateContent } from '../lib/api';
 import { PromptStyle, WritingRequest, ApiResponseDetails } from '../lib/types';
 import { OPENAI_API_URL, ANTHROPIC_API_URL, OLLAMA_API_URL, GOOGLE_AI_STUDIO_URL } from '../lib/constants';
 
-interface PlatformGeneratorUIProps {
-  platformName: string;
-  platformDescription: string;
-  defaultTopic: string;
-  defaultKeywords: string;
-  defaultWordCount: number;
+interface WeChatStrategistUIProps {
   getPlatformPromptStyle: () => PromptStyle;
-  getPlatformInstructions: (topic: string, keywords: string[], wordCount: number) => string;
+  getPlatformInstructions: (theme: string, coreIdea: string, audience: string, styleTone: string) => string;
 }
 
-const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
-  platformName,
-  platformDescription,
-  defaultTopic,
-  defaultKeywords,
-  defaultWordCount,
+const WeChatStrategistUI: React.FC<WeChatStrategistUIProps> = ({
   getPlatformPromptStyle,
   getPlatformInstructions,
 }) => {
-  const [topic, setTopic] = useState<string>(defaultTopic);
-  const [keywords, setKeywords] = useState<string>(defaultKeywords);
-  const [wordCount, setWordCount] = useState<number>(defaultWordCount);
+  // Content State
+  const [theme, setTheme] = useState<string>("例如：利用AI提升个人知识管理效率");
+  const [coreIdea, setCoreIdea] = useState<string>("例如：现代人面临信息过载，传统知识管理方式低效。AI工具可通过智能分类、自动摘要、关联挖掘等功能，帮助用户构建动态、高效的个人知识网络，从而释放创造力。");
+  const [audience, setAudience] = useState<string>("例如：知识工作者、学生、终身学习者、效率工具爱好者");
+  const [styleTone, setStyleTone] = useState<string>("例如：专业、前沿、实用、赋能感、略带科技美学");
+
+  // API State (similar to PlatformGeneratorUI)
   const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
   const [llmApiUrl, setLlmApiUrl] = useState<string>(OPENAI_API_URL);
   const [llmApiKey, setLlmApiKey] = useState<string>('');
   const [model, setModel] = useState<string>('gpt-4');
+  const [availableModels, setAvailableModels] = useState<string[]>(['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo']);
+
+  // Output State
   const [output, setOutput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [apiResponseDetails, setApiResponseDetails] = useState<ApiResponseDetails | null>(null);
   const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
 
   const fetchOllamaModels = useCallback(async () => {
     if (apiProvider === 'ollama') {
@@ -59,7 +55,7 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
           setModel('');
         }
       } catch (err) {
-        setError('Failed to fetch Ollama models. Please ensure Ollama is running and accessible.');
+        setError('获取Ollama模型失败，请确保Ollama正在运行并且可以访问。');
         setAvailableModels([]);
         setModel('');
       }
@@ -81,10 +77,9 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
     }
   }, [apiProvider, fetchOllamaModels]);
 
-
   const handleApiProviderChange = (provider: ApiProvider) => {
     setApiProvider(provider);
-    setLlmApiKey(''); // Reset API key when provider changes
+    setLlmApiKey('');
     setApiResponseDetails(null);
     setError(null);
     setOutput('');
@@ -114,7 +109,6 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
     }
   };
 
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
@@ -123,17 +117,17 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
     setApiResponseDetails(null);
 
     const promptStyle = getPlatformPromptStyle();
-    const platformSpecificInstructions = getPlatformInstructions(topic, keywords.split('、'), wordCount);
+    const platformSpecificInstructions = getPlatformInstructions(theme, coreIdea, audience, styleTone);
 
     const request: WritingRequest = {
-      prompt: platformSpecificInstructions, // Important: use platformSpecificInstructions as the main prompt
-      context: '', // Context might not be needed here or could be an empty string
+      prompt: platformSpecificInstructions,
+      context: '', // Context can be empty or configurable if needed later
       style: promptStyle,
-      tone: 'Neutral', // Or make this configurable if needed
-      format: 'Text', // Or make this configurable
-      language: 'English', // Or make this configurable
-      creativityLevel: 0.7, // Or make this configurable
-      wordCount: wordCount,
+      tone: 'Neutral', // This could also be derived from styleTone or be a separate input
+      format: 'Text', 
+      language: 'Chinese', // Specific to WeChat context
+      creativityLevel: 0.7,
+      wordCount: 0, // Word count might not be directly applicable here or could be an advanced option
       apiProvider,
       llmApiUrl,
       llmApiKey,
@@ -150,7 +144,7 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
         setApiResponseDetails(result.details || null);
       }
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred.');
+      setError(err.message || '发生未知错误。');
       setApiResponseDetails(null);
     } finally {
       setIsLoading(false);
@@ -159,18 +153,15 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
 
   const isGenerateButtonDisabled = () => {
     if (isLoading) return true;
-    if (apiProvider === 'openai' && !llmApiKey) return true;
-    if (apiProvider === 'anthropic' && !llmApiKey) return true;
-    if (apiProvider === 'google' && !llmApiKey) return true;
-    // Ollama might not require an API key depending on setup
+    if ((apiProvider === 'openai' || apiProvider === 'anthropic' || apiProvider === 'google') && !llmApiKey) return true;
     return false;
   };
 
   return (
     <div className="container mx-auto p-4 md:p-8">
       <header className="mb-8 text-center">
-        <h1 className="text-3xl font-bold text-gray-800">{platformName}</h1>
-        <p className="text-md text-gray-600 mt-2">{platformDescription}</p>
+        <h1 className="text-3xl font-bold text-gray-800">微信公众号运营策略师</h1>
+        <p className="text-md text-gray-600 mt-2">输入文章的核心要素，AI为你生成公众号文章的初步框架和内容建议。</p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -190,49 +181,63 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
               fetchOllamaModels={fetchOllamaModels}
               showApiSettings={showApiSettings}
               onShowApiSettingsChange={setShowApiSettings}
-              error={error && error.includes("API key") ? error : null} // Pass API key specific errors
+              error={error && error.includes("API key") ? error : null}
             />
 
             {showApiSettings && <hr className="my-6 border-gray-200" />}
 
             <div className="space-y-6 mb-6">
-              <h2 className="text-xl font-semibold text-gray-800 mb-4">Content Settings</h2>
+              <h2 className="text-xl font-semibold text-gray-800 mb-4">内容设置</h2>
               <div>
-                <label htmlFor="topic" className="block text-sm font-medium text-gray-700 mb-1">
-                  Main Topic/Goal
+                <label htmlFor="theme" className="block text-sm font-medium text-gray-700 mb-1">
+                  文章主题
                 </label>
                 <input
                   type="text"
-                  id="topic"
-                  value={topic}
-                  onChange={(e) => setTopic(e.target.value)}
-                  className="w-full p-2 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder={`e.g., "A blog post about the future of AI"`}
+                  id="theme"
+                  value={theme}
+                  onChange={(e) => setTheme(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  placeholder="例如：利用AI提升个人知识管理效率"
                 />
               </div>
               <div>
-                <label htmlFor="keywords" className="block text-sm font-medium text-gray-700 mb-1">
-                  Keywords (comma-separated, e.g., AI、machine learning、future)
+                <label htmlFor="coreIdea" className="block text-sm font-medium text-gray-700 mb-1">
+                  核心观点/摘要
+                </label>
+                <textarea
+                  id="coreIdea"
+                  value={coreIdea}
+                  onChange={(e) => setCoreIdea(e.target.value)}
+                  rows={4}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  placeholder="例如：现代人面临信息过载，传统知识管理方式低效..."
+                />
+              </div>
+              <div>
+                <label htmlFor="audience" className="block text-sm font-medium text-gray-700 mb-1">
+                  目标受众
                 </label>
                 <input
                   type="text"
-                  id="keywords"
-                  value={keywords}
-                  onChange={(e) => setKeywords(e.target.value)}
-                  className="w-full p-2 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                  placeholder="e.g., technology, innovation, disruption"
+                  id="audience"
+                  value={audience}
+                  onChange={(e) => setAudience(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  placeholder="例如：知识工作者、学生、终身学习者"
                 />
               </div>
               <div>
-                <label htmlFor="wordCount" className="block text-sm font-medium text-gray-700 mb-1">
-                  Approximate Word Count
+                <label htmlFor="styleTone" className="block text-sm font-medium text-gray-700 mb-1">
+                  期望文章风格/调性
                 </label>
                 <input
-                  type="number"
-                  id="wordCount"
-                  value={wordCount}
-                  onChange={(e) => setWordCount(parseInt(e.target.value, 10))}
-                  className="w-full p-2 bg-white border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  type="text"
+                  id="styleTone"
+                  value={styleTone}
+                  onChange={(e) => setStyleTone(e.target.value)}
+                  className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 bg-white"
+                  placeholder="例如：专业、前沿、实用、赋能感"
                 />
               </div>
             </div>
@@ -248,30 +253,30 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
                     <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
                     <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
                   </svg>
-                  Generating...
+                  生成中...
                 </div>
-              ) : `Generate ${platformName} Content`}
+              ) : "生成内容建议"}
             </button>
           </form>
         </div>
 
         {/* Right Column: Output & Editor */}
         <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
-          <h2 className="text-xl font-semibold text-gray-800 mb-4">Generated Result</h2>
+          <h2 className="text-xl font-semibold text-gray-800 mb-4">生成结果</h2>
           {isLoading && (
             <div className="flex justify-center items-center h-64">
               <div className="animate-pulse text-center">
                 <svg className="mx-auto h-12 w-12 text-blue-500" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
                 </svg>
-                <p className="mt-2 text-lg text-gray-600">Generating content... please wait.</p>
+                <p className="mt-2 text-lg text-gray-600">正在生成内容... 请稍候。</p>
               </div>
             </div>
           )}
 
           {error && (
             <div className="bg-red-50 text-red-700 p-4 rounded-md border border-red-200 mb-4" role="alert">
-              <strong className="font-bold">Error: </strong>
+              <strong className="font-bold">错误: </strong>
               <span className="block sm:inline">{error}</span>
               {apiResponseDetails && apiResponseDetails.rawError && (
                 <pre className="mt-2 text-xs bg-red-100 p-2 rounded overflow-auto">
@@ -286,7 +291,7 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
                 <svg xmlns="http://www.w3.org/2000/svg" className="mx-auto h-12 w-12" fill="none" viewBox="0 0 24 24" stroke="currentColor">
                   <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
                 </svg>
-                <p className="mt-2 text-gray-600">Generated content will appear here.</p>
+                <p className="mt-2 text-gray-600">生成的内容将在此处显示。</p>
              </div>
           )}
 
@@ -295,14 +300,14 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
           )}
 
           {apiResponseDetails && (
-            <div className="mt-6 bg-gray-50 p-4 rounded-md text-xs text-gray-700">
-              <h3 className="font-semibold text-sm text-gray-700 mb-2">API Response Details:</h3>
-              <p><strong>Model Used:</strong> {apiResponseDetails.modelUsed || model}</p>
-              {apiResponseDetails.latency !== undefined && <p><strong>Latency:</strong> {apiResponseDetails.latency.toFixed(2)} ms</p>}
-              {apiResponseDetails.promptTokens !== undefined && <p><strong>Prompt Tokens:</strong> {apiResponseDetails.promptTokens}</p>}
-              {apiResponseDetails.completionTokens !== undefined && <p><strong>Completion Tokens:</strong> {apiResponseDetails.completionTokens}</p>}
-              {apiResponseDetails.totalTokens !== undefined && <p><strong>Total Tokens:</strong> {apiResponseDetails.totalTokens}</p>}
-              {apiResponseDetails.cost !== undefined && <p><strong>Estimated Cost:</strong> ${apiResponseDetails.cost.toFixed(6)}</p>}
+            <div className="mt-6 bg-gray-50 p-4 rounded-md text-xs text-gray-600">
+              <h3 className="font-semibold text-sm text-gray-700 mb-2">API 响应详情:</h3>
+              <p><strong>使用模型:</strong> {apiResponseDetails.modelUsed || model}</p>
+              {apiResponseDetails.latency !== undefined && <p><strong>延迟:</strong> {apiResponseDetails.latency.toFixed(2)} ms</p>}
+              {apiResponseDetails.promptTokens !== undefined && <p><strong>提示 Tokens:</strong> {apiResponseDetails.promptTokens}</p>}
+              {apiResponseDetails.completionTokens !== undefined && <p><strong>完成 Tokens:</strong> {apiResponseDetails.completionTokens}</p>}
+              {apiResponseDetails.totalTokens !== undefined && <p><strong>总 Tokens:</strong> {apiResponseDetails.totalTokens}</p>}
+              {apiResponseDetails.cost !== undefined && <p><strong>预估费用:</strong> ${apiResponseDetails.cost.toFixed(6)}</p>}
             </div>
           )}
         </div>
@@ -311,4 +316,4 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
   );
 };
 
-export default PlatformGeneratorUI;
+export default WeChatStrategistUI;
