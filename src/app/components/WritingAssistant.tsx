@@ -8,50 +8,57 @@ import MarkdownEditor from './MarkdownEditor';
 import ApiSettings, { ApiProvider } from './ApiSettings';
 
 // Default prompt style template
-const defaultPromptStyle: PromptStyle = {
-  "style_summary": "质朴平实的散文笔触，以赶海为线索串联起乡愁记忆与人文关怀",
-  "language": {
-    "sentence_pattern": ["散文化的笔触，文字自然不造作", "营造场景叙事引人入胜"],
-    "word_choice": {
-      "formality_level": 3,
-      "preferred_words": [ "家乡", "小时候"],
-      "avoided_words": ["华丽辞藻", "生僻字"]
-    },
-    "rhetoric": ["回忆式叙述", "细节描写", "对比手法"]
+// const defaultPromptStyle: PromptStyle = { // This is no longer used, gongwenPromptStyle is used instead
+//   "style_summary": "质朴平实的散文笔触，以赶海为线索串联起乡愁记忆与人文关怀",
+//   // ... other fields
+// };
+
+const gongwenPromptStyle: PromptStyle = {
+  style_name: "GongwenOfficialDocument",
+  style_description: "Formal government document generation based on detailed user instructions.",
+  style_summary: "Formal, structured document generation.",
+  target_audience: { description: "", age_group: "", interests: [], education_level: "", language_proficiency: "" },
+  language: {
+    language_variety: "Chinese",
+    word_choice: { clarity_level: 5, conciseness_level: 5, formality_level: 5, technical_depth: 3, idiom_usage: [] },
+    sentence_structure: { complexity: 3, average_length: "20-30 words", variety: [] },
+    grammar: { tense: "Formal", voice: "Formal", mood: "Formal" },
+    rhetoric: [],
   },
-  "structure": {
-    "paragraph_length": "中等偏长，200-300字",
-    "transition_style": "以赶海的记忆和时光流逝进行过渡，今夕对比",
-    "hierarchy_pattern": "以时空为经,以物为纬"
+  structure: {
+    format_type: "Markdown",
+    length_constraints: "", // 由用户在主prompt中提供
+    paragraph_length: "",   // 由用户在主prompt中提供
+    heading_usage: "",      // 由用户在主prompt中提供
+    list_format: "Standard",
+    quotation_style: "Standard",
+    referencing_style: "Standard",
+    hierarchy_pattern: "",  // 由用户在主prompt中提供
   },
-  "narrative": {
-    "perspective": "第一人称回忆视角",
-    "time_sequence": "现在与过去交错",
-    "narrator_attitude": "怀旧而理性"
+  emotion: {
+    tone: "Formal and Objective", // 默认基调
+    emotional_arc: "",
+    humor_level: 0,
+    empathy_level: 0,
+    expression_style: "Formal",
   },
-  "emotion": {
-    "intensity": 3,
-    "expression_style": "含蓄内敛",
-    "tone": "温情怀旧"
+  creative_strategy: {
+    storytelling_elements: [],
+    analogies_metaphors: "None",
+    perspective: "Formal",
+    call_to_action: "", // 由用户在主prompt中提供
+    visual_appeal_notes: "",
   },
-  "thinking": {
-    "logic_pattern": "由物及事及情",
-    "depth": 4,
-    "rhythm": "舒缓平和"
-  },
-  "uniqueness": {
-    "signature_phrases": ["我们那里", "小时候"],
-    "imagery_system": ["赶海", "渔村", "童年"]
-  },
-  "cultural": {
-    "allusions": ["典故适度", "穿插回忆"],
-    "knowledge_domains": ["饮食文化", "赶海经历", "乡愁文学"]
-  },
-  "rhythm": {
-    "syllable_pattern": "自然流畅",
-    "pause_pattern": "长短句结合",
-    "tempo": "从容不迫"
-  }
+  cultural_references: { region: "China", common_knowledge: [], avoid_sensitive_topics: true },
+  formatting_guidelines: { line_spacing: "", font_style: "Formal", emphasis_techniques: [], multimedia_integration: "" },
+  ethical_considerations: { bias_avoidance: true, fact_checking: true, transparency: false },
+  output_requirements: { file_format: "Markdown", language_specific_conventions: ["Standard Chinese official document practices"] },
+  domain_specific_rules: {},
+  // Ensure all PromptStyle fields are covered as per the definition in types.ts
+  thinking: { logic_pattern: "Formal", depth: 4, rhythm: "Consistent" },
+  uniqueness: { signature_phrases: [], imagery_system: [] },
+  rhythm: { syllable_pattern: "Consistent", pause_pattern: "Formal", tempo: "Measured" },
+  narrative: { time_sequence: "Chronological", narrator_attitude: "Objective" },
 };
 
 // API 提供商选项
@@ -75,12 +82,6 @@ const API_HELP = {
 };
 
 export default function WritingAssistant() {
-  const [promptStyle, setPromptStyle] = useState<PromptStyle>(defaultPromptStyle);
-  const [topic, setTopic] = useState<string>('儿时赶海');
-  const [keywords, setKeywords] = useState<string>('浙江海边、小时候、渔村、温暖、质朴');
-  const [keywordInput, setKeywordInput] = useState<string>('');
-  const [wordCount, setWordCount] = useState<number>(800);
-  
   // API 设置
   const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
   const [llmApiUrl, setLlmApiUrl] = useState<string>(API_URLS.openai);
@@ -91,12 +92,40 @@ export default function WritingAssistant() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [apiResponseDetails, setApiResponseDetails] = useState<string | null>(null);
-  const [showPromptEditor, setShowPromptEditor] = useState<boolean>(false);
-  const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false);
+  // const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false); // Kept if needed for ApiSettings toggle, remove if only for old prompt
   const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
+
+  // New state variables for Gongwen Assistant
+  const [gongwenType, setGongwenType] = useState<string>('');
+  const [recipient, setRecipient] = useState<string>('');
+  const [mainTopic, setMainTopic] = useState<string>('');
+  const [writingRequirements, setWritingRequirements] = useState<string>('');
+  const [wordCountLimit, setWordCountLimit] = useState<string>(''); // 字数限制可以是文本，如 "800字左右"
+  const [referenceTexts, setReferenceTexts] = useState<string[]>(['']); // 初始化为一个空范文输入框
 
   // 添加 Ollama 模型列表状态
   const [availableModels, setAvailableModels] = useState<string[]>([]);
+
+  // Functions to handle reference texts
+  const handleReferenceTextChange = (index: number, value: string) => {
+    const newTexts = [...referenceTexts];
+    newTexts[index] = value;
+    setReferenceTexts(newTexts);
+  };
+
+  const addReferenceText = () => {
+    setReferenceTexts([...referenceTexts, '']);
+  };
+
+  const removeReferenceText = (index: number) => {
+    if (referenceTexts.length > 1) {
+      const newTexts = referenceTexts.filter((_, i) => i !== index);
+      setReferenceTexts(newTexts);
+    } else {
+      // If it's the last one, just clear it instead of removing the input field
+      setReferenceTexts(['']);
+    }
+  };
 
   // 获取可用的 Ollama 模型
   const fetchOllamaModels = async () => {
@@ -175,16 +204,6 @@ export default function WritingAssistant() {
     }
   };
 
-  // 为添加按钮新增单独的处理函数
-  const handleAddKeyword = () => {
-    if (keywordInput.trim()) {
-      // 更新关键词列表
-      const newKeywords = keywordInput.trim();
-      setKeywords(keywords ? `${keywords}、${newKeywords}` : newKeywords);
-      setKeywordInput(''); // 清空输入框
-    }
-  };
-
   // 当 API 提供商变化时更新 URL 和模型
   const handleApiProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const provider = e.target.value as ApiProvider;
@@ -214,71 +233,125 @@ export default function WritingAssistant() {
     setApiResponseDetails(null);
   };
 
-  const handleKeywordsChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    setKeywords(e.target.value);
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
-    setApiResponseDetails(null);
+    setApiResponseDetails(null); // 使用 setApiResponseDetails(null) 而不是 setApiResponseDetails('')
     setOutput('');
 
+    // 1. 构建公文笔杆子角色描述 (用户提供的固定部分)
+    const rolePrompt = `# Role：公文笔杆子
+
+## Background :
+我是一位在政府机关工作多年、经验丰富的公文写作专家（“笔杆子”）。我精通各类公文（如通知、报告、请示、函、会议纪要、讲话稿等）的格式、语体和行文逻辑，对政府机关的组织架构和工作流程有深入的理解和把握。
+
+## Attention:
+公文写作的质量直接影响政令的传达和执行效率。我将严格遵循您提供的结构化信息进行创作，确保内容精准、格式规范、语体得当。请您务必清晰、准确地填写下面的【核心任务指令】。
+## Profile:
+  - version: 1.0
+  - language: 中文
+  - description: 我是一位专业的公文写作专家，致力于根据您提供的结构化指令，为您撰写出专业、规范、高质量的各类公文。
+## Skills:
+  - 精通各类公文格式与标准。
+  - 深刻理解政府机关行文逻辑与语境。
+  - 能够根据不同的受文对象和目的，调整写作口吻与风格。
+  - 具备强大的信息整合与结构化写作能力。
+  - 能够进行逻辑严谨、条理清晰的论述。
+## Goals:
+  - 接收并理解用户在【核心任务指令】中提供的全部信息。
+  - 严格按照指令要求，生成一篇结构完整、要素齐全、符合规范的公文。
+  - 确保输出的公文内容准确、措辞严谨、逻辑清晰、可读性强。
+  - 如果用户提供了[参考范文]，我将尽力模仿其风格、结构和用语。
+## Constrains:
+  - 我只在您提供了下方【核心任务指令】中的所有必填信息后，才开始执行写作任务。
+  - 我不会创作任何违反法律法规或不符合基本事实的内容。
+  - 输出内容严格限制在公文写作领域，不进行闲聊或回答与任务无关的问题。
+## Workflow:
+1.  **问候与引导**：首先，我会向您问好，并明确告知您需要填写下面的【核心任务指令】。
+2.  **指令确认**：我会等待您将所有必填信息填写完整。
+3.  **构思与起草**：在您提供完整指令后，我将根据这些信息进行构思，并开始起草公文。
+4.  **输出交付**：最后，我将输出一篇完整的公文给您。
+-----
+`;
+
+    // 2. 构建核心任务指令 (根据用户输入动态生成)
+    let userInstructions = "### 核心任务指令 (请复制并填写)\n请您复制以下模板，并根据您的实际需求填写详细信息，这将直接决定我最终输出的公文质量。\n```\n";
+    userInstructions += `  - **公文类型 (必填)**: ${gongwenType || '（未填写）'}\n`;
+    userInstructions += `  - **受文对象 (必填)**: ${recipient || '（未填写）'}\n`;
+    userInstructions += `  - **核心主题 (必填)**: ${mainTopic || '（未填写）'}\n`;
+    userInstructions += `  - **写作要求 (必填)**: ${writingRequirements || '（未填写）'}\n`;
+    userInstructions += `  - **字数限制 (选填)**: ${wordCountLimit || '（未填写）'}\n`;
+    
+    const validReferenceTexts = referenceTexts.filter(text => text.trim() !== '');
+    if (validReferenceTexts.length > 0) {
+      userInstructions += `  - **参考范文 (选填)**:\n`;
+      validReferenceTexts.forEach((text, index) => {
+        userInstructions += `    --- 范文 ${index + 1} ---\n${text}\n`;
+      });
+    } else {
+      userInstructions += `  - **参考范文 (选填)**: （未提供）\n`;
+    }
+    userInstructions += "```\n\n";
+    
+    // 3. 初始化问候语 (用户提供的固定部分) - AI应在此之后开始其响应
+    const initializationPrompt = `## Initialization
+
+您好，我是您的专属“公文笔杆子”。为了给您撰写出最精准、最规范的公文，请您复制上方的【核心任务指令】模板，并详细填写各项信息。期待您的指令。
+---
+AI请严格按照上述角色和指令进行输出，直接开始生成公文内容。
+`;
+    // 组合最终的完整Prompt
+    const fullPrompt = rolePrompt + userInstructions + initializationPrompt;
+
+    // 4. 构建WritingRequest
+    // 我们将完整的 fullPrompt 作为 "topic" 传递给 formatPromptTemplate，
+    // 同时使用极简的 gongwenPromptStyle，并将 keywords 和 wordCount 设为辅助性质。
+    // generateContent 内部的 formatPromptTemplate 会将它们组合。
+    // formatPromptTemplate 的典型输出是: `${styleJson}
+
+---
+遵循以上风格为我编写一篇${wordCount}字的文章，主题是${topic}，输出格式为markdown。
+关键词：${keywordsStr}`
+    // 这里，我们的 fullPrompt 会被注入到 ${topic} 的位置。
+    
+    const request: WritingRequest = {
+      promptStyle: gongwenPromptStyle, // 使用简化的style
+      topic: fullPrompt,             // 完整指令作为topic
+      keywords: [],                  // keywords不再由用户直接输入，可为空
+      wordCount: 0,                  // wordCount由用户在写作要求或字数限制中描述，这里设为0或解析wordCountLimit
+      llmApiUrl: llmApiUrl,
+      llmApiKey: llmApiKey,
+      model: model,
+      apiProvider: apiProvider, // Ensure apiProvider is part of WritingRequest
+    };
+    
+    // 检查API密钥 (如果不是Ollama)
+    if (apiProvider !== 'ollama' && !llmApiKey) {
+      setError(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : apiProvider === 'deepseek' ? 'DeepSeek' : '自定义'} API 需要提供有效的 API 密钥`);
+      setIsLoading(false);
+      return;
+    }
+
+    console.log("发送给AI的完整Prompt预览 (实际包含Style JSON):", fullPrompt); // 用于调试
+
     try {
-      // 检查 API 密钥
-      if (apiProvider !== 'ollama' && !llmApiKey) {
-        throw new Error(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : apiProvider === 'deepseek' ? 'DeepSeek' : '自定义'} API 需要提供有效的 API 密钥`);
-      }
-      
-      // 确保使用正确的 URL 端点
-      let apiUrl = llmApiUrl;
-      if (apiProvider === 'ollama' && !llmApiUrl.includes('/api/generate')) {
-        const baseUrl = llmApiUrl.includes('/api/') 
-          ? llmApiUrl.substring(0, llmApiUrl.indexOf('/api/')) 
-          : llmApiUrl;
-        apiUrl = `${baseUrl}/api/generate`;
-        console.log('使用 Ollama 生成端点:', apiUrl);
-      }
-
-      // Prepare the request
-      const request: WritingRequest = {
-        promptStyle,
-        topic,
-        keywords: keywords.split('、'),
-        wordCount,
-        llmApiUrl: apiUrl,  // 使用可能修正后的 URL
-        llmApiKey, // Ollama 不需要 API 密钥，但保留该字段以保持接口一致性
-        model  // 添加模型参数
-      };
-
-      // 显示请求开始信息
-      console.log(`开始请求 ${apiProvider} API，使用模型: ${model}...`);
-      
-      // Generate content
-      const response = await generateContent(request);
+      const response = await generateContent(request); // generateContent内部会调用formatPromptTemplate
       
       if (response.error) {
         setError(response.error);
-        setApiResponseDetails('请查看浏览器控制台以获取更多错误详情。');
+        // setApiResponseDetails(response.details || '请查看浏览器控制台以获取更多错误详情。'); // 假设details是string
       } else if (!response.content || response.content.trim() === '') {
         setError('API 返回了空内容。这可能是由于 API 响应格式不符合预期。');
-        setApiResponseDetails('请尝试切换 API 提供商或检查 API 密钥和 URL 是否正确。');
+        // setApiResponseDetails('请尝试切换 API 提供商或检查 API 密钥和 URL 是否正确。');
       } else {
         setOutput(response.content);
+        // setApiResponseDetails(response.details || null);
       }
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '生成内容时发生未知错误';
       setError(errorMessage);
-      
-      // 添加更多帮助信息
-      if (errorMessage.includes('Failed to fetch') || errorMessage.includes('网络')) {
-        setApiResponseDetails('这可能是由于网络连接问题或 CORS 限制导致的。请确保您的网络连接稳定，并且 API 服务允许从您的网站发出请求。');
-      } else if (errorMessage.includes('认证') || errorMessage.includes('授权') || errorMessage.includes('auth') || errorMessage.includes('key')) {
-        setApiResponseDetails('这可能是由于 API 密钥不正确或已过期。请检查您的 API 密钥并确保它有效。');
-      } else {
-        setApiResponseDetails('请检查浏览器控制台以获取更多错误详情，或尝试使用不同的 API 提供商。');
-      }
+      // setApiResponseDetails('请检查浏览器控制台以获取更多错误详情，或尝试使用不同的 API 提供商。');
     } finally {
       setIsLoading(false);
     }
@@ -290,9 +363,9 @@ export default function WritingAssistant() {
     }
   };
 
-  const toggleDebugInfo = () => {
-    setShowDebugInfo(!showDebugInfo);
-  };
+  // const toggleDebugInfo = () => { // If showDebugInfo is removed, this should be too.
+  //   setShowDebugInfo(!showDebugInfo);
+  // };
 
   const toggleApiSettings = () => {
     setShowApiSettings(!showApiSettings);
@@ -303,8 +376,8 @@ export default function WritingAssistant() {
       <div className="container mx-auto px-4 py-8">
         {/* Header */}
         <div className="text-center mb-10">
-          <h1 className="text-4xl font-bold text-gray-800 mb-2">AI 写作助手</h1>
-          <p className="text-gray-600 max-w-2xl mx-auto">使用先进的人工智能模型，根据您的风格偏好生成高质量文章</p>
+          <h1 className="text-4xl font-bold text-gray-800 mb-2">公文写作助手</h1>
+          <p className="text-gray-600 max-w-2xl mx-auto">根据您的结构化指令，撰写专业、规范的各类公文。</p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -389,91 +462,72 @@ export default function WritingAssistant() {
                   )}
                 </div>
 
-                {/* Content Settings */}
+                {/* New Gongwen Input Fields */}
                 <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4">
                   <h3 className="font-medium text-gray-700 flex items-center">
                     <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
                       <path fillRule="evenodd" d="M4 4a2 2 0 012-2h4.586A2 2 0 0112 2.586L15.414 6A2 2 0 0116 7.414V16a2 2 0 01-2 2H6a2 2 0 01-2-2V4zm2 6a1 1 0 011-1h6a1 1 0 110 2H7a1 1 0 01-1-1zm1 3a1 1 0 100 2h6a1 1 0 100-2H7z" clipRule="evenodd" />
                     </svg>
-                    内容设置
+                    核心任务指令
                   </h3>
+                  <div>
+                    <label htmlFor="gongwenType" className="block text-sm font-medium text-gray-700 mb-1">公文类型 (必填)</label>
+                    <input type="text" id="gongwenType" value={gongwenType} onChange={(e) => setGongwenType(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required />
+                  </div>
+                  <div>
+                    <label htmlFor="recipient" className="block text-sm font-medium text-gray-700 mb-1">受文对象 (必填)</label>
+                    <input type="text" id="recipient" value={recipient} onChange={(e) => setRecipient(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required />
+                  </div>
+                  <div>
+                    <label htmlFor="mainTopic" className="block text-sm font-medium text-gray-700 mb-1">核心主题 (必填)</label>
+                    <input type="text" id="mainTopic" value={mainTopic} onChange={(e) => setMainTopic(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required />
+                  </div>
+                  <div>
+                    <label htmlFor="writingRequirements" className="block text-sm font-medium text-gray-700 mb-1">写作要求 (必填)</label>
+                    <textarea id="writingRequirements" value={writingRequirements} onChange={(e) => setWritingRequirements(e.target.value)} rows={4} className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" required></textarea>
+                  </div>
+                  <div>
+                    <label htmlFor="wordCountLimit" className="block text-sm font-medium text-gray-700 mb-1">字数限制 (选填)</label>
+                    <input type="text" id="wordCountLimit" value={wordCountLimit} onChange={(e) => setWordCountLimit(e.target.value)} className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500" />
+                  </div>
                   
+                  {/* Reference Texts Section */}
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      主题
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      关键词（用、分隔）
-                    </label>
-                    <input
-                      type="text"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={keywords}
-                      onChange={handleKeywordsChange}
-                      required
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">
-                      字数
-                    </label>
-                    <input
-                      type="number"
-                      min="100"
-                      step="100"
-                      className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      value={wordCount}
-                      onChange={(e) => setWordCount(Number(e.target.value))}
-                      required
-                    />
-                  </div>
-                </div>
-                
-                {/* Prompt Style Editor */}
-                <div 
-                  className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                  <div className="flex justify-between items-center">
-                    <h3 className="font-medium text-gray-700 flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                        <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z" />
-                        <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd" />
-                      </svg>
-                      提示词风格
-                    </h3>
-                    <button
-                      type="button"
-                      className="text-blue-600 hover:text-blue-800 text-sm font-medium transition duration-150 ease-in-out"
-                      onClick={(e) => {
-                        e.preventDefault(); // 阻止可能的表单提交
-                        e.stopPropagation(); // 阻止事件冒泡
-                        setShowPromptEditor(!showPromptEditor);
-                      }}
+                    <h4 className="text-sm font-medium text-gray-700 mb-2">参考范文 (选填，每篇范文粘贴在一个文本框内)</h4>
+                    {referenceTexts.map((text, index) => (
+                      <div key={index} className="flex items-center space-x-2 mb-2">
+                        <textarea
+                          value={text}
+                          onChange={(e) => handleReferenceTextChange(index, e.target.value)}
+                          rows={3}
+                          className="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                          placeholder={`范文 ${index + 1}`}
+                        />
+                        {referenceTexts.length > 1 && (
+                          <button 
+                            type="button" 
+                            onClick={() => removeReferenceText(index)}
+                            className="p-2 text-red-500 hover:text-red-700"
+                            aria-label="移除范文"
+                          >
+                            <svg xmlns="http://www.w3.org/2000/svg" className="h-5 w-5" viewBox="0 0 20 20" fill="currentColor">
+                              <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd" />
+                            </svg>
+                          </button>
+                        )}
+                      </div>
+                    ))}
+                    <button 
+                      type="button" 
+                      onClick={addReferenceText}
+                      className="mt-2 text-sm text-blue-600 hover:text-blue-800 flex items-center"
                     >
-                      {showPromptEditor ? '收起编辑器' : '展开编辑器'}
+                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1" viewBox="0 0 20 20" fill="currentColor">
+                        <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-11a1 1 0 10-2 0v2H7a1 1 0 100 2h2v2a1 1 0 102 0v-2h2a1 1 0 100-2h-2V7z" clipRule="evenodd" />
+                      </svg>
+                      增加一篇范文
                     </button>
                   </div>
-
-                  {showPromptEditor && (
-                    <div onClick={(e) => e.stopPropagation()}>
-                      <PromptForm 
-                        initialStyle={promptStyle} 
-                        onStyleChange={setPromptStyle} 
-                      />
-                    </div>
-                  )}
                 </div>
                 
                 <div className="flex space-x-4">

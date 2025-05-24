@@ -15,8 +15,8 @@ import Footer from "./components/Footer";
 // });
 
 export const metadata: Metadata = {
-  title: "AI 写作助手",
-  description: "由先进的大语言模型驱动的智能写作助手",
+  title: "公文写作助手 - AI驱动的专业公文拟稿服务",
+  description: "借助AI“公文笔杆子”，根据您的指令快速、规范地撰写各类政府机关及企事业单位常用公文。",
 };
 
 export default function RootLayout({
