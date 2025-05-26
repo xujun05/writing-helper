@@ -13,7 +13,7 @@ export default function FeatureLayout({
   subtitle,
 }: FeatureLayoutProps) {
   return (
-    <div className="bg-gray-50 flex flex-col">
+    <div className="bg-gradient-to-br from-gray-50 to-gray-100 flex flex-col min-h-screen">
       <Navigation />
       
       <main className="flex-1">
