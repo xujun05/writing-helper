@@ -92,7 +92,7 @@ export default function WritingAssistant() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [apiResponseDetails, setApiResponseDetails] = useState<string | null>(null);
-  // const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false); // Kept if needed for ApiSettings toggle, remove if only for old prompt
+  // const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false); // This will be removed
   const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
 
   // New state variables for Gongwen Assistant
@@ -310,9 +310,9 @@ AI请严格按照上述角色和指令进行输出，直接开始生成公文内
     // generateContent 内部的 formatPromptTemplate 会将它们组合。
     // formatPromptTemplate 的典型输出是: `${styleJson}
 
-//`---
-//遵循以上风格为我编写一篇${wordCount}字的文章，主题是${topic}，输出格式为markdown。
-//关键词：${keywordsStr}`
+---
+遵循以上风格为我编写一篇${wordCount}字的文章，主题是${topic}，输出格式为markdown。
+关键词：${keywordsStr}`
     // 这里，我们的 fullPrompt 会被注入到 ${topic} 的位置。
     
     const request: WritingRequest = {
@@ -363,7 +363,7 @@ AI请严格按照上述角色和指令进行输出，直接开始生成公文内
     }
   };
 
-  // const toggleDebugInfo = () => { // If showDebugInfo is removed, this should be too.
+  // const toggleDebugInfo = () => { // This will be removed
   //   setShowDebugInfo(!showDebugInfo);
   // };
 
@@ -402,16 +402,7 @@ AI请严格按照上述角色和指令进行输出，直接开始生成公文内
                       API 设置
                     </h3>
                     <div className="flex items-center space-x-2">
-                      <button
-                        type="button"
-                        className="text-xs bg-gray-200 hover:bg-gray-300 text-gray-700 px-2 py-1 rounded-md transition duration-150 ease-in-out"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          toggleDebugInfo();
-                        }}
-                      >
-                        {showDebugInfo ? '隐藏调试信息' : '显示调试信息'}
-                      </button>
+                      {/* The debug button that was here has been removed. */}
                       <svg 
                         xmlns="http://www.w3.org/2000/svg" 
                         className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${showApiSettings ? 'transform rotate-180' : ''}`} 
