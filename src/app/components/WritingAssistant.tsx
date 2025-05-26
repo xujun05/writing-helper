@@ -310,9 +310,9 @@ AI请严格按照上述角色和指令进行输出，直接开始生成公文内
     // generateContent 内部的 formatPromptTemplate 会将它们组合。
     // formatPromptTemplate 的典型输出是: `${styleJson}
 
----
-遵循以上风格为我编写一篇${wordCount}字的文章，主题是${topic}，输出格式为markdown。
-关键词：${keywordsStr}`
+//`---
+//遵循以上风格为我编写一篇${wordCount}字的文章，主题是${topic}，输出格式为markdown。
+//关键词：${keywordsStr}`
     // 这里，我们的 fullPrompt 会被注入到 ${topic} 的位置。
     
     const request: WritingRequest = {
