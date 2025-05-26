@@ -300,21 +300,11 @@ export default function WritingAssistant() {
 您好，我是您的专属“公文笔杆子”。为了给您撰写出最精准、最规范的公文，请您复制上方的【核心任务指令】模板，并详细填写各项信息。期待您的指令。
 ---
 AI请严格按照上述角色和指令进行输出，直接开始生成公文内容。
-`;
-    // 组合最终的完整Prompt
-    const fullPrompt = rolePrompt + userInstructions + initializationPrompt;
-
-    // 4. 构建WritingRequest
-    // 我们将完整的 fullPrompt 作为 "topic" 传递给 formatPromptTemplate，
-    // 同时使用极简的 gongwenPromptStyle，并将 keywords 和 wordCount 设为辅助性质。
-    // generateContent 内部的 formatPromptTemplate 会将它们组合。
-    // formatPromptTemplate 的典型输出是: `${styleJson}
-
----
 遵循以上风格为我编写一篇${wordCount}字的文章，主题是${topic}，输出格式为markdown。
 关键词：${keywordsStr}`
     // 这里，我们的 fullPrompt 会被注入到 ${topic} 的位置。
-    
+    const fullPrompt = rolePrompt + userInstructions + initializationPrompt;
+
     const request: WritingRequest = {
       promptStyle: gongwenPromptStyle, // 使用简化的style
       topic: fullPrompt,             // 完整指令作为topic
