@@ -3,15 +3,8 @@
 import React, { useState } from 'react';
 import { PromptStyle, WritingRequest } from '../lib/types';
 import { generateContent, exportToMarkdown } from '../lib/api';
-import PromptForm from './PromptForm';
 import MarkdownEditor from './MarkdownEditor';
 import ApiSettings, { ApiProvider } from './ApiSettings';
-
-// Default prompt style template
-// const defaultPromptStyle: PromptStyle = { // This is no longer used, gongwenPromptStyle is used instead
-//   "style_summary": "质朴平实的散文笔触，以赶海为线索串联起乡愁记忆与人文关怀",
-//   // ... other fields
-// };
 
 const gongwenPromptStyle: PromptStyle = {
   style_name: "GongwenOfficialDocument",
@@ -92,7 +85,6 @@ export default function WritingAssistant() {
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [apiResponseDetails, setApiResponseDetails] = useState<string | null>(null);
-  // const [showDebugInfo, setShowDebugInfo] = useState<boolean>(false); // This will be removed
   const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
 
   // New state variables for Gongwen Assistant
@@ -363,8 +355,8 @@ AI请严格按照上述角色和指令进行输出，直接开始生成公文内
     }
   };
 
-  // const toggleDebugInfo = () => { // This will be removed
-  //   setShowDebugInfo(!showDebugInfo);
+  // const toggleDebugInfo = () => { 
+  //  // This function is no longer needed as showDebugInfo and its corresponding button are removed.
   // };
 
   const toggleApiSettings = () => {
