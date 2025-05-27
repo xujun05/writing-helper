@@ -79,7 +79,6 @@ async function _internalGenerateContent(request: WritingRequest): Promise<ApiRes
       default:
         requestBody = {
           model: model || API_PROVIDER_CONFIG.openai.defaultModel || 'gpt-4',
-        messages: [
           messages: [{ role: 'user', content: promptTemplate }],
           temperature: 0.7,
         };
