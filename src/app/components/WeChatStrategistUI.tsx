@@ -1,11 +1,11 @@
 "use client";
 
 import React, { useState, useEffect, useCallback } from 'react';
-import ApiSettings, { ApiProvider } from './ApiSettings';
+import ApiSettings from './ApiSettings'; // ApiProvider type will be imported from constants
 import MarkdownEditor from './MarkdownEditor';
 import { generateContent } from '../lib/api';
 import { PromptStyle, WritingRequest, ApiResponseDetails } from '../lib/types';
-import { OPENAI_API_URL, ANTHROPIC_API_URL, OLLAMA_API_URL, GOOGLE_AI_STUDIO_URL } from '../lib/constants';
+import { API_PROVIDER_CONFIG, ApiProvider } from '../lib/constants'; // Import centralized config and type
 
 interface WeChatStrategistUIProps {
   getPlatformPromptStyle: () => PromptStyle;
@@ -22,12 +22,13 @@ const WeChatStrategistUI: React.FC<WeChatStrategistUIProps> = ({
   const [audience, setAudience] = useState<string>("例如：知识工作者、学生、终身学习者、效率工具爱好者");
   const [styleTone, setStyleTone] = useState<string>("例如：专业、前沿、实用、赋能感、略带科技美学");
 
-  // API State (similar to PlatformGeneratorUI)
+  // API State
   const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
-  const [llmApiUrl, setLlmApiUrl] = useState<string>(OPENAI_API_URL);
+  const initialConfig = API_PROVIDER_CONFIG[apiProvider];
+  const [llmApiUrl, setLlmApiUrl] = useState<string>(initialConfig.url);
   const [llmApiKey, setLlmApiKey] = useState<string>('');
-  const [model, setModel] = useState<string>('gpt-4');
-  const [availableModels, setAvailableModels] = useState<string[]>(['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo']);
+  const [model, setModel] = useState<string>(initialConfig.defaultModel || '');
+  const [availableModels, setAvailableModels] = useState<string[]>(initialConfig.availableModels || []);
 
   // Output State
   const [output, setOutput] = useState<string>('');
@@ -65,48 +66,29 @@ const WeChatStrategistUI: React.FC<WeChatStrategistUIProps> = ({
   useEffect(() => {
     if (apiProvider === 'ollama') {
       fetchOllamaModels();
-    } else if (apiProvider === 'openai') {
-      setAvailableModels(['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo']);
-      setModel('gpt-4');
-    } else if (apiProvider === 'anthropic') {
-      setAvailableModels(['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307']);
-      setModel('claude-3-opus-20240229');
-    } else if (apiProvider === 'google') {
-      setAvailableModels(['gemini-pro', 'gemini-1.5-pro-latest']);
-      setModel('gemini-1.5-pro-latest');
     }
+    // Available models for other providers are now set in onApiProviderChange
+    // Default model is set by ApiSettings component calling onModelChange
   }, [apiProvider, fetchOllamaModels]);
 
-  const handleApiProviderChange = (provider: ApiProvider) => {
-    setApiProvider(provider);
-    setLlmApiKey('');
+  const onApiProviderChange = (newProvider: ApiProvider) => {
+    setApiProvider(newProvider);
+    // ApiSettings will call setLlmApiUrl and setModel with new defaults.
+    if (newProvider === 'ollama') {
+      setLlmApiKey(''); // Clear API key for Ollama
+    }
+    const config = API_PROVIDER_CONFIG[newProvider];
+    // Update available models list for non-Ollama providers directly
+    // For Ollama, fetchOllamaModels will update it.
+    if (newProvider !== 'ollama') {
+      setAvailableModels(config.availableModels || []);
+    } else {
+      setAvailableModels([]); // Clear for Ollama until fetch completes
+    }
+    
     setApiResponseDetails(null);
     setError(null);
     setOutput('');
-    switch (provider) {
-      case 'openai':
-        setLlmApiUrl(OPENAI_API_URL);
-        setModel('gpt-4');
-        setAvailableModels(['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo']);
-        break;
-      case 'anthropic':
-        setLlmApiUrl(ANTHROPIC_API_URL);
-        setModel('claude-3-opus-20240229');
-        setAvailableModels(['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307']);
-        break;
-      case 'ollama':
-        setLlmApiUrl(OLLAMA_API_URL);
-        // fetchOllamaModels will be called by useEffect
-        break;
-      case 'google':
-        setLlmApiUrl(GOOGLE_AI_STUDIO_URL);
-        setModel('gemini-1.5-pro-latest');
-        setAvailableModels(['gemini-pro', 'gemini-1.5-pro-latest']);
-        break;
-      default:
-        setLlmApiUrl(OPENAI_API_URL);
-        setModel('gpt-4');
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -170,18 +152,19 @@ const WeChatStrategistUI: React.FC<WeChatStrategistUIProps> = ({
           <form onSubmit={handleSubmit}>
             <ApiSettings
               apiProvider={apiProvider}
-              onApiProviderChange={handleApiProviderChange}
-              llmApiKey={llmApiKey}
-              onLlmApiKeyChange={setLlmApiKey}
-              llmApiUrl={llmApiUrl}
-              onLlmApiUrlChange={setLlmApiUrl}
+              setApiProvider={onApiProviderChange} // Pass the refactored handler
+              apiKey={llmApiKey} // Prop name in ApiSettings is apiKey
+              setApiKey={setLlmApiKey} // Prop name in ApiSettings is setApiKey
+              apiUrl={llmApiUrl} // Prop name in ApiSettings is apiUrl
+              setApiUrl={setLlmApiUrl} // Prop name in ApiSettings is setApiUrl
               model={model}
-              onModelChange={setModel}
+              setModel={setModel}
               availableModels={availableModels}
-              fetchOllamaModels={fetchOllamaModels}
-              showApiSettings={showApiSettings}
-              onShowApiSettingsChange={setShowApiSettings}
-              error={error && error.includes("API key") ? error : null}
+              fetchModels={fetchOllamaModels} // Prop name in ApiSettings is fetchModels
+              showSettings={showApiSettings} // Prop name in ApiSettings is showSettings
+              toggleSettings={setShowApiSettings} // Prop name in ApiSettings is toggleSettings
+              // Error prop in ApiSettings is not explicitly defined in the problem, assuming it's handled internally or not needed.
+              // error={error && error.includes("API key") ? error : null} 
             />
 
             {showApiSettings && <hr className="my-6 border-gray-200" />}

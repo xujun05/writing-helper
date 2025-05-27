@@ -3,6 +3,7 @@ import type { Metadata } from "next";
 import "./globals.css";
 import Script from 'next/script';
 import Footer from "./components/Footer";
+import { GlobalContextProviders } from './contexts/GlobalContextProviders'; // Import the wrapper
 
 // const geistSans = Geist({
 //   variable: "--font-geist-sans",
@@ -27,8 +28,9 @@ export default function RootLayout({
   return (
     <html lang="zh">
       <body className="antialiased flex flex-col min-h-screen">
-        <Script id="cherry-studio-detection" strategy="afterInteractive">
-          {`
+        <GlobalContextProviders> {/* Wrap the content with the provider */}
+          <Script id="cherry-studio-detection" strategy="afterInteractive">
+            {`
             // 检测是否在Cherry Studio中运行
             function isInCherryStudio() {
               try {
@@ -48,11 +50,12 @@ export default function RootLayout({
               console.log('Running in standard environment');
             }
           `}
-        </Script>
-        <div className="flex-grow">
-          {children}
-        </div>
-        <Footer />
+          </Script>
+          <div className="flex-grow">
+            {children}
+          </div>
+          <Footer />
+        </GlobalContextProviders>
       </body>
     </html>
   );

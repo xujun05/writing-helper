@@ -1,9 +1,10 @@
 "use client";
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react'; // Added useEffect
 import FeatureLayout from '../../components/FeatureLayout';
-import ApiSettings, { ApiProvider } from '../../components/ApiSettings';
+import ApiSettings from '../../components/ApiSettings'; // ApiProvider type will be imported from constants
 import { ApiResponse } from '../../../app/lib/types';
+import { API_PROVIDER_CONFIG, ApiProvider } from '../../../app/lib/constants'; // Import centralized config
 
 // 预设的洗稿 prompt
 const presetPrompts = [
@@ -217,15 +218,6 @@ const presetPrompts = [
   }
 ];
 
-// 默认 API URLs
-const API_URLS: Record<ApiProvider, string> = {
-  openai: 'https://api.openai.com/v1/chat/completions',
-  grok: 'https://api.x.ai/v1/chat/completions',
-  ollama: 'http://localhost:11434/api/generate',
-  deepseek: 'https://api.deepseek.com/v1/chat/completions',
-  custom: ''
-};
-
 export default function AIRewritePage() {
   const [content, setContent] = useState('');
   const [result, setResult] = useState('');
@@ -240,11 +232,12 @@ export default function AIRewritePage() {
 
   // API 设置状态
   const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
-  const [llmApiUrl, setLlmApiUrl] = useState<string>(API_URLS.openai);
+  const initialConfig = API_PROVIDER_CONFIG[apiProvider];
+  const [llmApiUrl, setLlmApiUrl] = useState<string>(initialConfig.url);
   const [llmApiKey, setLlmApiKey] = useState<string>('');
-  const [model, setModel] = useState<string>('gpt-4');
+  const [model, setModel] = useState<string>(initialConfig.defaultModel || '');
   const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [availableModels, setAvailableModels] = useState<string[]>(initialConfig.availableModels || []);
 
   // 获取当前选中的预设prompt文本
   const getSelectedPromptText = () => {
@@ -568,21 +561,18 @@ ${strategiesResponse.content}
               showSettings={showApiSettings}
               toggleSettings={toggleApiSettings}
               apiProvider={apiProvider}
-              setApiProvider={(provider) => {
-                setApiProvider(provider);
-                if (provider === 'openai') {
-                  setLlmApiUrl('https://api.openai.com/v1/chat/completions');
-                  setModel('gpt-4');
-                } else if (provider === 'grok') {
-                  setLlmApiUrl('https://api.x.ai/v1/chat/completions');
-                  setModel('grok-3-latest');
-                } else if (provider === 'ollama') {
-                  setLlmApiUrl('http://localhost:11434/api/generate');
-                  setModel('llama2');
-                  setLlmApiKey('');
-                } else if (provider === 'deepseek') {
-                  setLlmApiUrl('https://api.deepseek.com/v1/chat/completions');
-                  setModel('deepseek-chat');
+              setApiProvider={(newProvider: ApiProvider) => {
+                setApiProvider(newProvider); // Update local state
+                // ApiSettings component will internally call setLlmApiUrl and setModel
+                // with new defaults from API_PROVIDER_CONFIG.
+                
+                // Component-specific logic:
+                if (newProvider === 'ollama') {
+                  setLlmApiKey(''); // Clear API key for Ollama
+                  setAvailableModels([]); // Clear for Ollama until fetch completes
+                } else {
+                  const config = API_PROVIDER_CONFIG[newProvider];
+                  setAvailableModels(config.availableModels || []);
                 }
                 setError(null);
                 setApiResponseDetails(null);
@@ -594,8 +584,16 @@ ${strategiesResponse.content}
               model={model}
               setModel={setModel}
               availableModels={availableModels}
-              fetchModels={fetchOllamaModels}
+              fetchModels={fetchOllamaModels} // Pass fetchOllamaModels to ApiSettings
             />
+
+            { /* useEffect to fetch Ollama models when provider changes to ollama */ }
+            useEffect(() => {
+              if (apiProvider === 'ollama') {
+                fetchOllamaModels();
+              }
+            }, [apiProvider]); {/* Added fetchOllamaModels to dependency array if it's stable, otherwise might cause re-fetches if it's redefined on every render. Assuming it's stable. */}
+
 
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">

@@ -55,31 +55,18 @@ const gongwenPromptStyle: PromptStyle = {
 };
 
 // API 提供商选项
-// type ApiProvider = 'openai' | 'grok' | 'ollama' | 'custom';
+import { API_PROVIDER_CONFIG } from '../lib/constants'; // Import the centralized config
 
-// 默认 API URLs
-const API_URLS: Record<ApiProvider, string> = {
-  openai: 'https://api.openai.com/v1/chat/completions',
-  grok: 'https://api.grok.ai/v1/chat/completions',
-  ollama: 'http://localhost:11434/api/generate',
-  deepseek: 'https://api.deepseek.com/v1/chat/completions',
-  custom: ''
-};
-
-// API 提供商帮助信息
-const API_HELP = {
-  openai: '使用 OpenAI API，例如 GPT-4',
-  grok: '使用 Grok API (X.AI)',
-  ollama: '使用本地运行的 Ollama 服务',
-  custom: '配置自定义 API 端点'
-};
+// type ApiProvider = 'openai' | 'grok' | 'ollama' | 'custom'; // This type is now imported from ApiSettings or constants
 
 export default function WritingAssistant() {
   // API 设置
   const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
-  const [llmApiUrl, setLlmApiUrl] = useState<string>(API_URLS.openai);
+  // Initialize llmApiUrl and model using API_PROVIDER_CONFIG from constants
+  const initialConfig = API_PROVIDER_CONFIG[apiProvider];
+  const [llmApiUrl, setLlmApiUrl] = useState<string>(initialConfig.url); 
   const [llmApiKey, setLlmApiKey] = useState<string>('');
-  const [model, setModel] = useState<string>('gpt-4'); // 添加模型设置
+  const [model, setModel] = useState<string>(initialConfig.defaultModel || ''); 
   
   const [output, setOutput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
@@ -194,35 +181,6 @@ export default function WritingAssistant() {
       
       return []; // 返回空数组，避免后续处理出错
     }
-  };
-
-  // 当 API 提供商变化时更新 URL 和模型
-  const handleApiProviderChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
-    const provider = e.target.value as ApiProvider;
-    setApiProvider(provider);
-    
-    // 如果是预设的提供商，自动填充 URL
-    if (provider !== 'custom') {
-      setLlmApiUrl(API_URLS[provider]);
-    }
-    
-    // 根据提供商设置默认模型
-    if (provider === 'grok') {
-      setModel('grok-3-latest');
-    } else if (provider === 'ollama') {
-      setModel('llama2');
-      // 清空 API Key，因为 Ollama 不需要
-      setLlmApiKey('');
-    } else if (provider === 'openai') {
-      setModel('gpt-4');
-    } else if (provider === 'deepseek') {
-      setLlmApiUrl('https://api.deepseek.com/v1/chat/completions');
-      setModel('deepseek-chat');
-    }
-    
-    // 重置错误
-    setError(null);
-    setApiResponseDetails(null);
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -397,28 +355,22 @@ export default function WritingAssistant() {
                   {showApiSettings && (
                     <ApiSettings 
                       showSettings={true}
-                      toggleSettings={() => {}} // 这里已经控制显示了，所以传入空函数
+                      toggleSettings={() => {}} // Display is controlled by showApiSettings state
                       apiProvider={apiProvider}
                       setApiProvider={(provider) => {
                         setApiProvider(provider);
-                        // 当更改提供商时，直接更新URL（使用预定义的默认值）
-                        if (provider === 'openai') {
-                          setLlmApiUrl('https://api.openai.com/v1/chat/completions');
-                          setModel('gpt-4');
-                        } else if (provider === 'grok') {
-                          setLlmApiUrl('https://api.grok.ai/v1/chat/completions');
-                          setModel('grok-3-latest');
-                        } else if (provider === 'ollama') {
-                          setLlmApiUrl('http://localhost:11434/api/generate');  // 确保使用 /api/generate 端点
-                          setModel('llama2');
-                          // 清空 API Key，因为 Ollama 不需要
-                          setLlmApiKey('');
-                        } else if (provider === 'deepseek') {
-                          setLlmApiUrl('https://api.deepseek.com/v1/chat/completions');
-                          setModel('deepseek-chat');
+                        // The ApiSettings component will now internally call setLlmApiUrl and setModel
+                        // using the values from API_PROVIDER_CONFIG.
+                        // We still need to handle Ollama specific API key clearing here, or ensure ApiSettings does it.
+                        // For now, let's assume ApiSettings handles default URL/model.
+                        // Specific logic like clearing API key for Ollama might still need to be here or moved.
+                        // Let's simplify and expect ApiSettings to manage this based on provider.
+                        // If apiProvider changes to 'ollama', ApiSettings should also know to signal that no key is needed.
+                        // The `setLlmApiKey('')` for ollama can be handled in ApiSettings or here based on `provider`.
+                        if (provider === 'ollama') {
+                           setLlmApiKey(''); // Keep this specific logic here for now, or ensure ApiSettings handles it.
                         }
-                        // 重置错误
-                        setError(null);
+                        setError(null); // Reset errors on provider change
                         setApiResponseDetails(null);
                       }}
                       apiUrl={llmApiUrl}
