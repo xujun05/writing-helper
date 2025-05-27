@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import ApiSettings from './ApiSettings'; // ApiProvider type will be imported from constants
+import React, { useState } from 'react'; // Removed useCallback, useEffect
 import MarkdownEditor from './MarkdownEditor';
-import { generateContent } from '../lib/api';
-import { PromptStyle, WritingRequest, ApiResponseDetails } from '../lib/types';
-import { API_PROVIDER_CONFIG, ApiProvider } from '../lib/constants'; // Import centralized config and type
+// Removed generateContent, ApiSettings imports
+import { useApiConfiguredGenerator } from '../lib/api'; // Import the new hook
+import { PromptStyle, WritingRequest, ApiResponseDetails } from '../lib/types'; // WritingRequest might need Omit
+import { API_PROVIDER_CONFIG, ApiProvider } from '../lib/constants'; // Keep ApiProvider for DESIGNATED_PROVIDER_TYPE
 
 interface WeChatStrategistUIProps {
   getPlatformPromptStyle: () => PromptStyle;
@@ -22,74 +22,20 @@ const WeChatStrategistUI: React.FC<WeChatStrategistUIProps> = ({
   const [audience, setAudience] = useState<string>("例如：知识工作者、学生、终身学习者、效率工具爱好者");
   const [styleTone, setStyleTone] = useState<string>("例如：专业、前沿、实用、赋能感、略带科技美学");
 
-  // API State
-  const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
-  const initialConfig = API_PROVIDER_CONFIG[apiProvider];
-  const [llmApiUrl, setLlmApiUrl] = useState<string>(initialConfig.url);
-  const [llmApiKey, setLlmApiKey] = useState<string>('');
-  const [model, setModel] = useState<string>(initialConfig.defaultModel || '');
-  const [availableModels, setAvailableModels] = useState<string[]>(initialConfig.availableModels || []);
+  // Removed API State: apiProvider, llmApiUrl, llmApiKey, model, availableModels, showApiSettings
+  // Removed fetchOllamaModels, onApiProviderChange, useEffect related to API state
 
   // Output State
   const [output, setOutput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [apiResponseDetails, setApiResponseDetails] = useState<ApiResponseDetails | null>(null);
-  const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
+  // showApiSettings state is removed
 
-  const fetchOllamaModels = useCallback(async () => {
-    if (apiProvider === 'ollama') {
-      try {
-        const response = await fetch('/api/proxy/ollama-models', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ollamaApiUrl: llmApiUrl }),
-        });
-        if (!response.ok) {
-          throw new Error(`Ollama API request failed with status ${response.status}`);
-        }
-        const data = await response.json();
-        setAvailableModels(data.models.map((m: any) => m.name) || []);
-        if (data.models.length > 0) {
-          setModel(data.models[0].name);
-        } else {
-          setModel('');
-        }
-      } catch (err) {
-        setError('获取Ollama模型失败，请确保Ollama正在运行并且可以访问。');
-        setAvailableModels([]);
-        setModel('');
-      }
-    }
-  }, [apiProvider, llmApiUrl]);
+  // Define the designated provider type for this component
+  const DESIGNATED_PROVIDER_TYPE: ApiProvider = 'openai';
+  const configuredGenerate = useApiConfiguredGenerator(DESIGNATED_PROVIDER_TYPE);
 
-  useEffect(() => {
-    if (apiProvider === 'ollama') {
-      fetchOllamaModels();
-    }
-    // Available models for other providers are now set in onApiProviderChange
-    // Default model is set by ApiSettings component calling onModelChange
-  }, [apiProvider, fetchOllamaModels]);
-
-  const onApiProviderChange = (newProvider: ApiProvider) => {
-    setApiProvider(newProvider);
-    // ApiSettings will call setLlmApiUrl and setModel with new defaults.
-    if (newProvider === 'ollama') {
-      setLlmApiKey(''); // Clear API key for Ollama
-    }
-    const config = API_PROVIDER_CONFIG[newProvider];
-    // Update available models list for non-Ollama providers directly
-    // For Ollama, fetchOllamaModels will update it.
-    if (newProvider !== 'ollama') {
-      setAvailableModels(config.availableModels || []);
-    } else {
-      setAvailableModels([]); // Clear for Ollama until fetch completes
-    }
-    
-    setApiResponseDetails(null);
-    setError(null);
-    setOutput('');
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -101,74 +47,57 @@ const WeChatStrategistUI: React.FC<WeChatStrategistUIProps> = ({
     const promptStyle = getPlatformPromptStyle();
     const platformSpecificInstructions = getPlatformInstructions(theme, coreIdea, audience, styleTone);
 
-    const request: WritingRequest = {
-      prompt: platformSpecificInstructions,
-      context: '', // Context can be empty or configurable if needed later
-      style: promptStyle,
-      tone: 'Neutral', // This could also be derived from styleTone or be a separate input
-      format: 'Text', 
-      language: 'Chinese', // Specific to WeChat context
-      creativityLevel: 0.7,
-      wordCount: 0, // Word count might not be directly applicable here or could be an advanced option
-      apiProvider,
-      llmApiUrl,
-      llmApiKey,
-      model,
+    // Construct request payload for configuredGenerate
+    const requestPayload = { // Type will be Omit<WritingRequest, ...>
+      prompt: platformSpecificInstructions, // This was specific to old generateContent, needs to map to new structure if different
+      // The old `generateContent` used `promptStyle`, `topic`, `keywords`, `wordCount` to build the prompt.
+      // The new `_internalGenerateContent` expects `promptStyle`, `topic`, `keywords`, `wordCount`.
+      // So we pass these directly. The `getPlatformInstructions` might need to be used to form the `topic` or part of it.
+      // For now, assuming `platformSpecificInstructions` is the main `topic` for the prompt template.
+      topic: platformSpecificInstructions, // Assuming this is the main content/topic for the prompt template
+      promptStyle: promptStyle,
+      keywords: [], // Keywords might be part of platformSpecificInstructions or handled differently
+      wordCount: 0, // Or use state.wordCount if it's still relevant
+      // language, creativityLevel, format, tone are not directly in WritingRequest but part of PromptStyle or implied
+      // No need to pass: apiProvider, llmApiUrl, llmApiKey, model
     };
-
+    
     try {
-      const result = await generateContent(request);
+      // Use the configuredGenerate function from the hook
+      const result = await configuredGenerate(requestPayload);
       if (result.error) {
         setError(result.error);
-        setApiResponseDetails(result.details || null);
+        setApiResponseDetails({ rawError: result.error } as ApiResponseDetails); // Adapt if result has more details
       } else {
         setOutput(result.content || '');
         setApiResponseDetails(result.details || null);
       }
     } catch (err: any) {
       setError(err.message || '发生未知错误。');
-      setApiResponseDetails(null);
+      setApiResponseDetails({ rawError: err.message } as ApiResponseDetails);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const isGenerateButtonDisabled = () => {
-    if (isLoading) return true;
-    if ((apiProvider === 'openai' || apiProvider === 'anthropic' || apiProvider === 'google') && !llmApiKey) return true;
-    return false;
-  };
+  // isGenerateButtonDisabled function is removed as API key check is no longer local
 
   return (
     <div className="container mx-auto p-4 md:p-8">
       <header className="mb-8 text-center">
         <h1 className="text-3xl font-bold text-gray-800">微信公众号运营策略师</h1>
-        <p className="text-md text-gray-600 mt-2">输入文章的核心要素，AI为你生成公众号文章的初步框架和内容建议。</p>
+        <p className="text-md text-gray-600 mt-2">
+          输入文章的核心要素，AI为你生成公众号文章的初步框架和内容建议。 
+          (使用 {API_PROVIDER_CONFIG[DESIGNATED_PROVIDER_TYPE].helpText.split(" ")[0]} API)
+        </p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left Column: Settings & Form */}
         <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
           <form onSubmit={handleSubmit}>
-            <ApiSettings
-              apiProvider={apiProvider}
-              setApiProvider={onApiProviderChange} // Pass the refactored handler
-              apiKey={llmApiKey} // Prop name in ApiSettings is apiKey
-              setApiKey={setLlmApiKey} // Prop name in ApiSettings is setApiKey
-              apiUrl={llmApiUrl} // Prop name in ApiSettings is apiUrl
-              setApiUrl={setLlmApiUrl} // Prop name in ApiSettings is setApiUrl
-              model={model}
-              setModel={setModel}
-              availableModels={availableModels}
-              fetchModels={fetchOllamaModels} // Prop name in ApiSettings is fetchModels
-              showSettings={showApiSettings} // Prop name in ApiSettings is showSettings
-              toggleSettings={setShowApiSettings} // Prop name in ApiSettings is toggleSettings
-              // Error prop in ApiSettings is not explicitly defined in the problem, assuming it's handled internally or not needed.
-              // error={error && error.includes("API key") ? error : null} 
-            />
-
-            {showApiSettings && <hr className="my-6 border-gray-200" />}
-
+            {/* ApiSettings component and related UI elements are removed */}
+            
             <div className="space-y-6 mb-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">内容设置</h2>
               <div>
@@ -227,7 +156,7 @@ const WeChatStrategistUI: React.FC<WeChatStrategistUIProps> = ({
 
             <button
               type="submit"
-              disabled={isGenerateButtonDisabled()}
+              disabled={isLoading} // Simplified disabled logic
               className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 px-4 rounded-md transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
             >
               {isLoading ? (
@@ -285,12 +214,14 @@ const WeChatStrategistUI: React.FC<WeChatStrategistUIProps> = ({
           {apiResponseDetails && (
             <div className="mt-6 bg-gray-50 p-4 rounded-md text-xs text-gray-600">
               <h3 className="font-semibold text-sm text-gray-700 mb-2">API 响应详情:</h3>
-              <p><strong>使用模型:</strong> {apiResponseDetails.modelUsed || model}</p>
+              {/* Update these if the hook provides similar details, or remove if not applicable */}
+              <p><strong>使用模型:</strong> {apiResponseDetails.modelUsed || API_PROVIDER_CONFIG[DESIGNATED_PROVIDER_TYPE].defaultModel}</p>
               {apiResponseDetails.latency !== undefined && <p><strong>延迟:</strong> {apiResponseDetails.latency.toFixed(2)} ms</p>}
               {apiResponseDetails.promptTokens !== undefined && <p><strong>提示 Tokens:</strong> {apiResponseDetails.promptTokens}</p>}
               {apiResponseDetails.completionTokens !== undefined && <p><strong>完成 Tokens:</strong> {apiResponseDetails.completionTokens}</p>}
               {apiResponseDetails.totalTokens !== undefined && <p><strong>总 Tokens:</strong> {apiResponseDetails.totalTokens}</p>}
               {apiResponseDetails.cost !== undefined && <p><strong>预估费用:</strong> ${apiResponseDetails.cost.toFixed(6)}</p>}
+              {apiResponseDetails.rawError && <pre className="mt-2 text-xs bg-red-100 p-2 rounded overflow-auto">Error Details: {apiResponseDetails.rawError}</pre>}
             </div>
           )}
         </div>

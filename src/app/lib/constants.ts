@@ -48,13 +48,7 @@ export const API_PROVIDER_CONFIG: Record<ApiProvider, ApiProviderDetails> = {
   }
 };
 
-// The constants below are now sourced from API_PROVIDER_CONFIG
-// export const OPENAI_API_URL = 'https://api.openai.com/v1/chat/completions';
-// export const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-// export const OLLAMA_API_URL = 'http://localhost:11434/api/generate';
-// export const GOOGLE_AI_STUDIO_URL = 'https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent';
-// export const GROK_API_URL = 'https://api.x.ai/v1/chat/completions';
-// export const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
+// Redundant constants previously commented out have been removed.
 
 export const APP_TITLE = 'Writing Assistant';
 export const DEBOUNCE_DELAY = 500;
@@ -88,18 +82,7 @@ export const BUTTON_TEXT_SETTINGS = 'Settings';
 export const BUTTON_TEXT_DOCUMENT = 'Document';
 export const BUTTON_TEXT_EXPORT = 'Export';
 
-// Default models are now sourced from API_PROVIDER_CONFIG.defaultModel
-// export const DEFAULT_OPENAI_MODEL = 'gpt-4';
-// export const DEFAULT_ANTHROPIC_MODEL = 'claude-3-opus-20240229';
-// export const DEFAULT_OLLAMA_MODEL = 'llama2';
-// export const DEFAULT_GOOGLE_AI_STUDIO_MODEL = 'gemini-1.5-pro-latest';
-// export const DEFAULT_GROK_MODEL = 'grok-3-latest';
-// export const DEFAULT_DEEPSEEK_MODEL = 'deepseek-chat';
-
-// Available models are now sourced from API_PROVIDER_CONFIG.availableModels
-// export const AVAILABLE_OPENAI_MODELS = ['gpt-4', 'gpt-4-turbo', 'gpt-3.5-turbo'];
-// export const AVAILABLE_ANTHROPIC_MODELS = ['claude-3-opus-20240229', 'claude-3-sonnet-20240229', 'claude-3-haiku-20240307'];
-// export const AVAILABLE_GOOGLE_AI_MODELS = ['gemini-pro', 'gemini-1.5-pro-latest'];
+// Redundant constants previously commented out have been removed.
 
 export const MODEL_CONFIG_SCHEMA_URL = 'https://json.schemastore.org/model-config.json';
 export const DEFAULT_MODEL_CONFIG_PATH = './modelconfig.json';

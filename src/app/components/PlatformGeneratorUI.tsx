@@ -1,11 +1,11 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import ApiSettings from './ApiSettings'; // ApiProvider type will be imported from constants
+import React, { useState } from 'react'; // Removed useEffect and useCallback
 import MarkdownEditor from './MarkdownEditor';
-import { generateContent } from '../lib/api';
+// Removed generateContent, ApiSettings imports
+import { useApiConfiguredGenerator } from '../lib/api'; // Import the new hook
 import { PromptStyle, WritingRequest, ApiResponseDetails } from '../lib/types';
-import { API_PROVIDER_CONFIG, ApiProvider } from '../lib/constants'; // Import centralized config
+import { API_PROVIDER_CONFIG, ApiProvider } from '../lib/constants';
 
 interface PlatformGeneratorUIProps {
   platformName: string;
@@ -29,73 +29,20 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
   const [topic, setTopic] = useState<string>(defaultTopic);
   const [keywords, setKeywords] = useState<string>(defaultKeywords);
   const [wordCount, setWordCount] = useState<number>(defaultWordCount);
-  
-  const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
-  const initialConfig = API_PROVIDER_CONFIG[apiProvider];
-  const [llmApiUrl, setLlmApiUrl] = useState<string>(initialConfig.url);
-  const [llmApiKey, setLlmApiKey] = useState<string>('');
-  const [model, setModel] = useState<string>(initialConfig.defaultModel || '');
+
+  // Removed API State: apiProvider, llmApiUrl, llmApiKey, model, availableModels, showApiSettings
+  // Removed fetchOllamaModels, handleProviderChangeInParent, useEffect related to API state
   
   const [output, setOutput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
   const [apiResponseDetails, setApiResponseDetails] = useState<ApiResponseDetails | null>(null);
-  const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
-  const [availableModels, setAvailableModels] = useState<string[]>(initialConfig.availableModels || []);
+  // showApiSettings state is removed
 
-  const fetchOllamaModels = useCallback(async () => {
-    // apiProvider state is used here, ensure it's up-to-date or pass as arg if needed
-    // llmApiUrl state is used here, ensure it's up-to-date or pass as arg
-    if (apiProvider === 'ollama') { 
-      try {
-        const response = await fetch('/api/proxy/ollama-models', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ ollamaApiUrl: llmApiUrl }),
-        });
-        if (!response.ok) {
-          throw new Error(`Ollama API request failed with status ${response.status}`);
-        }
-        const data = await response.json();
-        setAvailableModels(data.models.map((m: any) => m.name) || []);
-        if (data.models.length > 0) {
-          setModel(data.models[0].name);
-        } else {
-          setModel('');
-        }
-      } catch (err) {
-        setError('Failed to fetch Ollama models. Please ensure Ollama is running and accessible.');
-        setAvailableModels([]);
-        setModel('');
-      }
-    }
-  }, [apiProvider, llmApiUrl]);
+  // Define the designated provider type for this component
+  const DESIGNATED_PROVIDER_TYPE: ApiProvider = 'openai';
+  const configuredGenerate = useApiConfiguredGenerator(DESIGNATED_PROVIDER_TYPE);
 
-  useEffect(() => {
-    if (apiProvider === 'ollama') {
-      fetchOllamaModels();
-    }
-    // The rest of the logic for other providers is now in handleProviderChangeInParent
-  }, [apiProvider, fetchOllamaModels]);
-
-  const handleProviderChangeInParent = (newProvider: ApiProvider) => {
-    setApiProvider(newProvider); // Update local state
-    // ApiSettings component will internally call setLlmApiUrl and setModel.
-
-    // Component-specific logic:
-    if (newProvider === 'ollama') {
-      setLlmApiKey(''); // Clear API key for Ollama
-      setAvailableModels([]); // Clear for Ollama until fetch completes
-    } else {
-      const config = API_PROVIDER_CONFIG[newProvider];
-      setAvailableModels(config.availableModels || []);
-      // Default model and URL are set by ApiSettings calling setModel and setLlmApiUrl
-    }
-    
-    setApiResponseDetails(null);
-    setError(null);
-    setOutput('');
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -107,76 +54,51 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
     const promptStyle = getPlatformPromptStyle();
     const platformSpecificInstructions = getPlatformInstructions(topic, keywords.split('、'), wordCount);
 
-    const request: WritingRequest = {
-      prompt: platformSpecificInstructions, // Important: use platformSpecificInstructions as the main prompt
-      context: '', // Context might not be needed here or could be an empty string
-      style: promptStyle,
-      tone: 'Neutral', // Or make this configurable if needed
-      format: 'Text', // Or make this configurable
-      language: 'English', // Or make this configurable
-      creativityLevel: 0.7, // Or make this configurable
+    // Construct request payload for configuredGenerate
+    const requestPayload = { // Type will be Omit<WritingRequest, ...>
+      topic: platformSpecificInstructions, // Map platformSpecificInstructions to topic
+      promptStyle: promptStyle,
+      keywords: keywords.split('、'), // Ensure keywords are passed as an array
       wordCount: wordCount,
-      apiProvider,
-      llmApiUrl,
-      llmApiKey,
-      model,
+      // language, creativityLevel, format, tone are not directly in WritingRequest but part of PromptStyle or implied
+      // No need to pass: apiProvider, llmApiUrl, llmApiKey, model
     };
-
+    
     try {
-      const result = await generateContent(request);
+      // Use the configuredGenerate function from the hook
+      const result = await configuredGenerate(requestPayload);
       if (result.error) {
         setError(result.error);
-        setApiResponseDetails(result.details || null);
+        setApiResponseDetails({ rawError: result.error } as ApiResponseDetails); // Adapt if result has more details
       } else {
         setOutput(result.content || '');
         setApiResponseDetails(result.details || null);
       }
     } catch (err: any) {
       setError(err.message || 'An unexpected error occurred.');
-      setApiResponseDetails(null);
+      setApiResponseDetails({ rawError: err.message } as ApiResponseDetails);
     } finally {
       setIsLoading(false);
     }
   };
 
-  const isGenerateButtonDisabled = () => {
-    if (isLoading) return true;
-    if (apiProvider === 'openai' && !llmApiKey) return true;
-    if (apiProvider === 'anthropic' && !llmApiKey) return true;
-    if (apiProvider === 'google' && !llmApiKey) return true;
-    // Ollama might not require an API key depending on setup
-    return false;
-  };
+  // isGenerateButtonDisabled function removed
 
   return (
     <div className="container mx-auto p-4 md:p-8">
       <header className="mb-8 text-center">
         <h1 className="text-3xl font-bold text-gray-800">{platformName}</h1>
-        <p className="text-md text-gray-600 mt-2">{platformDescription}</p>
+        <p className="text-md text-gray-600 mt-2">
+          {platformDescription} (Using {API_PROVIDER_CONFIG[DESIGNATED_PROVIDER_TYPE].helpText.split(" ")[0]} API via Global Settings)
+        </p>
       </header>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Left Column: Settings & Form */}
         <div className="bg-white shadow-sm rounded-xl p-6 border border-gray-200">
           <form onSubmit={handleSubmit}>
-            <ApiSettings
-              apiProvider={apiProvider}
-              setApiProvider={handleProviderChangeInParent} // Use the new handler
-              apiKey={llmApiKey} // Prop name expected by ApiSettings
-              setApiKey={setLlmApiKey} // Prop name expected by ApiSettings
-              apiUrl={llmApiUrl} // Prop name expected by ApiSettings
-              setApiUrl={setLlmApiUrl} // Prop name expected by ApiSettings
-              model={model}
-              setModel={setModel} // Prop name expected by ApiSettings
-              availableModels={availableModels}
-              fetchModels={fetchOllamaModels} // Prop name expected by ApiSettings
-              showSettings={showApiSettings} // Prop name expected by ApiSettings
-              toggleSettings={setShowApiSettings} // Prop name expected by ApiSettings
-              // error prop is not explicitly defined in ApiSettings from previous tasks, assuming not needed or handled internally
-            />
-
-            {showApiSettings && <hr className="my-6 border-gray-200" />}
-
+            {/* ApiSettings component and related UI elements are removed */}
+            
             <div className="space-y-6 mb-6">
               <h2 className="text-xl font-semibold text-gray-800 mb-4">Content Settings</h2>
               <div>
@@ -221,7 +143,7 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
 
             <button
               type="submit"
-              disabled={isGenerateButtonDisabled()}
+              disabled={isLoading} // Simplified disabled logic
               className="w-full bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white font-bold py-3 px-4 rounded-md transition duration-150 ease-in-out disabled:opacity-50 disabled:cursor-not-allowed shadow-md"
             >
               {isLoading ? (
@@ -279,12 +201,14 @@ const PlatformGeneratorUI: React.FC<PlatformGeneratorUIProps> = ({
           {apiResponseDetails && (
             <div className="mt-6 bg-gray-50 p-4 rounded-md text-xs text-gray-700">
               <h3 className="font-semibold text-sm text-gray-700 mb-2">API Response Details:</h3>
-              <p><strong>Model Used:</strong> {apiResponseDetails.modelUsed || model}</p>
+              {/* Update these if the hook provides similar details, or remove if not applicable */}
+              <p><strong>Model Used:</strong> {apiResponseDetails.modelUsed || API_PROVIDER_CONFIG[DESIGNATED_PROVIDER_TYPE].defaultModel}</p>
               {apiResponseDetails.latency !== undefined && <p><strong>Latency:</strong> {apiResponseDetails.latency.toFixed(2)} ms</p>}
               {apiResponseDetails.promptTokens !== undefined && <p><strong>Prompt Tokens:</strong> {apiResponseDetails.promptTokens}</p>}
               {apiResponseDetails.completionTokens !== undefined && <p><strong>Completion Tokens:</strong> {apiResponseDetails.completionTokens}</p>}
               {apiResponseDetails.totalTokens !== undefined && <p><strong>Total Tokens:</strong> {apiResponseDetails.totalTokens}</p>}
               {apiResponseDetails.cost !== undefined && <p><strong>Estimated Cost:</strong> ${apiResponseDetails.cost.toFixed(6)}</p>}
+              {apiResponseDetails.rawError && <pre className="mt-2 text-xs bg-red-100 p-2 rounded overflow-auto">Error Details: {apiResponseDetails.rawError}</pre>}
             </div>
           )}
         </div>

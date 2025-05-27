@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState } from 'react';
-import { PromptStyle, WritingRequest } from '../lib/types';
-import { generateContent, exportToMarkdown } from '../lib/api';
+import React, { useState, useEffect } from 'react'; // Added useEffect for potential future use, not strictly needed by this diff
+import { PromptStyle, WritingRequest } from '../lib/types'; // WritingRequest might need adjustment if its structure changes for Omit
+import { useApiConfiguredGenerator, exportToMarkdown } from '../lib/api'; // Import the new hook, ApiProvider type from constants
 import MarkdownEditor from './MarkdownEditor';
-import ApiSettings, { ApiProvider } from './ApiSettings';
+// ApiSettings import is removed
+import { ApiProvider } from '../lib/constants'; // Import ApiProvider for DESIGNATED_PROVIDER_TYPE
 
 const gongwenPromptStyle: PromptStyle = {
   style_name: "GongwenOfficialDocument",
@@ -54,25 +55,20 @@ const gongwenPromptStyle: PromptStyle = {
   narrative: { time_sequence: "Chronological", narrator_attitude: "Objective" },
 };
 
-// API 提供商选项
-import { API_PROVIDER_CONFIG } from '../lib/constants'; // Import the centralized config
+// API_PROVIDER_CONFIG import might not be needed if all config is through the hook
 
-// type ApiProvider = 'openai' | 'grok' | 'ollama' | 'custom'; // This type is now imported from ApiSettings or constants
+// Define the designated provider type for this component
+const DESIGNATED_PROVIDER_TYPE: ApiProvider = 'openai';
 
 export default function WritingAssistant() {
-  // API 设置
-  const [apiProvider, setApiProvider] = useState<ApiProvider>('openai');
-  // Initialize llmApiUrl and model using API_PROVIDER_CONFIG from constants
-  const initialConfig = API_PROVIDER_CONFIG[apiProvider];
-  const [llmApiUrl, setLlmApiUrl] = useState<string>(initialConfig.url); 
-  const [llmApiKey, setLlmApiKey] = useState<string>('');
-  const [model, setModel] = useState<string>(initialConfig.defaultModel || ''); 
+  // Removed local API settings states: apiProvider, llmApiUrl, llmApiKey, model, showApiSettings, availableModels
   
   const [output, setOutput] = useState<string>('');
   const [isLoading, setIsLoading] = useState<boolean>(false);
   const [error, setError] = useState<string | null>(null);
-  const [apiResponseDetails, setApiResponseDetails] = useState<string | null>(null);
-  const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
+  // apiResponseDetails might still be useful if the hook returns them, or can be removed.
+  // For now, keeping it, but its source might change.
+  const [apiResponseDetails, setApiResponseDetails] = useState<string | null>(null); 
 
   // New state variables for Gongwen Assistant
   const [gongwenType, setGongwenType] = useState<string>('');
@@ -82,8 +78,10 @@ export default function WritingAssistant() {
   const [wordCountLimit, setWordCountLimit] = useState<string>(''); // 字数限制可以是文本，如 "800字左右"
   const [referenceTexts, setReferenceTexts] = useState<string[]>(['']); // 初始化为一个空范文输入框
 
-  // 添加 Ollama 模型列表状态
-  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  // Removed: availableModels state, fetchOllamaModels function
+
+  // Integrate the new hook
+  const configuredGenerate = useApiConfiguredGenerator(DESIGNATED_PROVIDER_TYPE);
 
   // Functions to handle reference texts
   const handleReferenceTextChange = (index: number, value: string) => {
@@ -103,83 +101,6 @@ export default function WritingAssistant() {
     } else {
       // If it's the last one, just clear it instead of removing the input field
       setReferenceTexts(['']);
-    }
-  };
-
-  // 获取可用的 Ollama 模型
-  const fetchOllamaModels = async () => {
-    try {
-      setError(null); // 清除之前的错误
-      console.log('开始获取 Ollama 模型列表...');
-      
-      // 使用代理接口而不是直接调用本地 Ollama API
-      // 这可以避免浏览器的 CORS 限制
-      const response = await fetch('/api/proxy/ollama-models', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ollamaUrl: 'http://localhost:11434/api/tags'
-        }),
-        // 添加超时设置以避免长时间等待
-        signal: AbortSignal.timeout(5000)
-      });
-      
-      if (!response.ok) {
-        const errorText = await response.text();
-        console.error(`获取模型列表失败: ${response.status} ${response.statusText}`, errorText);
-        throw new Error(`无法获取模型列表: ${response.status} ${response.statusText}`);
-      }
-      
-      const data = await response.json();
-      console.log('获取到的 Ollama 模型数据:', data);
-      
-      // 检查数据格式，处理可能的不同结构
-      let modelsList: string[] = [];
-      
-      if (data.models && Array.isArray(data.models)) {
-        modelsList = data.models.filter((model: unknown) => typeof model === 'string') as string[];
-      } else if (data.names && Array.isArray(data.names)) {
-        modelsList = data.names.filter((model: unknown) => typeof model === 'string') as string[];
-      }
-      
-      console.log('处理后的模型列表:', modelsList);
-      
-      if (modelsList.length > 0) {
-        // 为了确保UI更新，先清空后设置
-        setAvailableModels([]);
-        setTimeout(() => {
-          setAvailableModels(modelsList);
-          
-          // 如果当前模型不在列表中，则选择第一个模型
-          if (!modelsList.includes(model)) {
-            setModel(modelsList[0]);
-          }
-        }, 10);
-        
-        console.log(`成功获取到 ${modelsList.length} 个 Ollama 模型`);
-      } else {
-        console.warn('未找到 Ollama 模型列表');
-        setAvailableModels([]);
-        // 保持默认模型名称 'llama2'
-      }
-      
-      return modelsList; // 返回处理后的模型列表
-    } catch (error) {
-      console.error('获取模型列表失败:', error);
-      setAvailableModels([]); // 清空模型列表，使用默认值
-      
-      // 根据错误类型提供更具体的错误信息
-      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        setError('无法连接到 Ollama 服务，请确保: 1) Ollama 已安装并运行 2) 服务地址正确');
-      } else if (error instanceof DOMException && error.name === 'AbortError') {
-        setError('获取模型列表超时，请检查 Ollama 服务是否响应');
-      } else {
-        setError('无法获取 Ollama 模型列表，请确保 Ollama 服务正在运行');
-      }
-      
-      return []; // 返回空数组，避免后续处理出错
     }
   };
 
@@ -252,32 +173,28 @@ export default function WritingAssistant() {
     const fullPrompt = rolePrompt + userInstructions + initializationPrompt;
 
     // 这里，我们的 fullPrompt 会被注入到 ${topic} 的位置。
-    
-    const request: WritingRequest = {
-      promptStyle: gongwenPromptStyle, // 使用简化的style
-      topic: fullPrompt,             // 完整指令作为topic
-      keywords: [],                  // keywords不再由用户直接输入，可为空
-      wordCount: parseInt(wordCountLimit) || 0, // 使用用户输入的字数限制
-      llmApiUrl: llmApiUrl,
-      llmApiKey: llmApiKey,
-      model: model,
-      apiProvider: apiProvider, // Ensure apiProvider is part of WritingRequest
+
+    // Construct request payload for configuredGenerate (Omit API specific fields)
+    const requestPayload = {
+      promptStyle: gongwenPromptStyle,
+      topic: fullPrompt,
+      keywords: [], 
+      wordCount: parseInt(wordCountLimit) || 0,
+      // llmApiUrl, llmApiKey, model, apiProvider are removed
     };
     
-    // 检查API密钥 (如果不是Ollama)
-    if (apiProvider !== 'ollama' && !llmApiKey) {
-      setError(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : apiProvider === 'deepseek' ? 'DeepSeek' : '自定义'} API 需要提供有效的 API 密钥`);
-      setIsLoading(false);
-      return;
-    }
-
-    console.log("发送给AI的完整Prompt预览 (实际包含Style JSON):", fullPrompt); // 用于调试
+    // API Key check is removed, handled by the hook / global settings.
+    // console.log("Sending payload to configuredGenerate:", requestPayload); // For debugging
 
     try {
-      const response = await generateContent(request); // generateContent内部会调用formatPromptTemplate
+      // Use the configuredGenerate function from the hook
+      const response = await configuredGenerate(requestPayload);
       
       if (response.error) {
         setError(response.error);
+        // Assuming the hook might provide details in the error or a separate field if needed
+        // For now, setApiResponseDetails can be cleared or used if response contains details
+        setApiResponseDetails(response.error); // Or some part of response.details if available
         // setApiResponseDetails(response.details || '请查看浏览器控制台以获取更多错误详情。'); // 假设details是string
       } else if (!response.content || response.content.trim() === '') {
         setError('API 返回了空内容。这可能是由于 API 响应格式不符合预期。');
@@ -301,13 +218,7 @@ export default function WritingAssistant() {
     }
   };
 
-  // const toggleDebugInfo = () => { 
-  //  // This function is no longer needed as showDebugInfo and its corresponding button are removed.
-  // };
-
-  const toggleApiSettings = () => {
-    setShowApiSettings(!showApiSettings);
-  };
+  // Removed toggleApiSettings function
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
@@ -315,7 +226,9 @@ export default function WritingAssistant() {
         {/* Header */}
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">公文写作助手</h1>
-          <p className="text-gray-600 max-w-2xl mx-auto">根据您的结构化指令，撰写专业、规范的各类公文。</p>
+          <p className="text-gray-600 max-w-2xl mx-auto">
+            根据您的结构化指令，撰写专业、规范的各类公文。 (使用 {API_PROVIDER_CONFIG[DESIGNATED_PROVIDER_TYPE].helpText.split(" ")[0]} API)
+          </p>
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-8">
@@ -330,61 +243,8 @@ export default function WritingAssistant() {
               </h2>
               
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* LLM API Settings */}
-                <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4">
-                  <div className="flex justify-between items-center cursor-pointer" onClick={toggleApiSettings}>
-                    <h3 className="font-medium text-gray-700 flex items-center">
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4 mr-1 text-blue-600" viewBox="0 0 20 20" fill="currentColor">
-                        <path fillRule="evenodd" d="M2 5a2 2 0 012-2h12a2 2 0 012 2v10a2 2 0 01-2 2H4a2 2 0 01-2-2V5zm14 1H4v8a1 1 0 001 1h10a1 1 0 001-1V6zM4 4a1 1 0 011-1h10a1 1 0 011 1v1H4V4z" clipRule="evenodd" />
-                      </svg>
-                      API 设置
-                    </h3>
-                    <div className="flex items-center space-x-2">
-                      {/* The debug button that was here has been removed. */}
-                      <svg 
-                        xmlns="http://www.w3.org/2000/svg" 
-                        className={`h-5 w-5 text-gray-500 transition-transform duration-200 ${showApiSettings ? 'transform rotate-180' : ''}`} 
-                        viewBox="0 0 20 20" 
-                        fill="currentColor"
-                      >
-                        <path fillRule="evenodd" d="M5.293 7.293a1 1 0 011.414 0L10 10.586l3.293-3.293a1 1 0 111.414 1.414l-4 4a1 1 0 01-1.414 0l-4-4a1 1 0 010-1.414z" clipRule="evenodd" />
-                      </svg>
-                    </div>
-                  </div>
-
-                  {showApiSettings && (
-                    <ApiSettings 
-                      showSettings={true}
-                      toggleSettings={() => {}} // Display is controlled by showApiSettings state
-                      apiProvider={apiProvider}
-                      setApiProvider={(provider) => {
-                        setApiProvider(provider);
-                        // The ApiSettings component will now internally call setLlmApiUrl and setModel
-                        // using the values from API_PROVIDER_CONFIG.
-                        // We still need to handle Ollama specific API key clearing here, or ensure ApiSettings does it.
-                        // For now, let's assume ApiSettings handles default URL/model.
-                        // Specific logic like clearing API key for Ollama might still need to be here or moved.
-                        // Let's simplify and expect ApiSettings to manage this based on provider.
-                        // If apiProvider changes to 'ollama', ApiSettings should also know to signal that no key is needed.
-                        // The `setLlmApiKey('')` for ollama can be handled in ApiSettings or here based on `provider`.
-                        if (provider === 'ollama') {
-                           setLlmApiKey(''); // Keep this specific logic here for now, or ensure ApiSettings handles it.
-                        }
-                        setError(null); // Reset errors on provider change
-                        setApiResponseDetails(null);
-                      }}
-                      apiUrl={llmApiUrl}
-                      setApiUrl={setLlmApiUrl}
-                      apiKey={llmApiKey}
-                      setApiKey={setLlmApiKey}
-                      model={model}
-                      setModel={setModel}
-                      availableModels={availableModels}
-                      fetchModels={fetchOllamaModels}
-                    />
-                  )}
-                </div>
-
+                {/* LLM API Settings UI is removed */}
+                
                 {/* New Gongwen Input Fields */}
                 <div className="bg-gray-50 p-5 rounded-lg border border-gray-200 space-y-4">
                   <h3 className="font-medium text-gray-700 flex items-center">
@@ -456,8 +316,8 @@ export default function WritingAssistant() {
                 <div className="flex space-x-4">
                   <button
                     type="submit"
-                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2 px-6 rounded-md font-medium disabled:opacity-60 disabled:from-gray-400 disabled:to-gray-500 transition duration-150 ease-in-out transform hover:scale-105 shadow-md"
-                    disabled={isLoading || (apiProvider !== 'ollama' && !llmApiKey)}
+                    className="bg-gradient-to-r from-blue-600 to-blue-700 hover:from-blue-700 hover:to-blue-800 text-white py-2 px-6 rounded-md font-medium disabled:opacity-60 transition duration-150 ease-in-out transform hover:scale-105 shadow-md"
+                    disabled={isLoading} // API key check is removed, hook handles it.
                   >
                     {isLoading ? (
                       <span className="flex items-center">

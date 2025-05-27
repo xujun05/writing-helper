@@ -1,168 +1,249 @@
 "use client";
 
 import { WritingRequest, ApiResponse, PromptStyle, PolishRequest, PolishResponse } from './types';
+import { useCallback } from 'react';
+import { useApiSettings } from '../contexts/ApiSettingsContext'; // Adjust path as necessary
+import { API_PROVIDER_CONFIG, ApiProvider } from './constants'; // Adjust path as necessary
 
-export async function generateContent(request: WritingRequest): Promise<ApiResponse> {
+// Renamed original generateContent to _internalGenerateContent
+// Added apiProvider to its parameters for explicit provider logic if needed beyond URL detection
+async function _internalGenerateContent(request: WritingRequest): Promise<ApiResponse> {
   try {
-    const { promptStyle, topic, keywords, wordCount, llmApiUrl, llmApiKey, model } = request;
+    const { promptStyle, topic, keywords, wordCount, llmApiUrl, llmApiKey, model, apiProvider } = request;
     
     // Format the prompt template
     const promptTemplate = formatPromptTemplate(promptStyle, topic, keywords, wordCount);
     
-    // Detect API provider type from URL (simple detection)
-    const isGrokApi = llmApiUrl.includes('grok') || llmApiUrl.includes('xai');
-    const isOllamaApi = llmApiUrl.includes('ollama') || llmApiUrl.includes('11434');
-    const isDeepSeekApi = llmApiUrl.includes('deepseek');
-    
-    // URL 由前端组件和代理处理，这里直接使用
+    // Use the passed apiProvider to determine behavior, fallback to URL detection if necessary
+    const providerType = apiProvider || (llmApiUrl.includes('ollama') ? 'ollama' : 
+                                       llmApiUrl.includes('grok') || llmApiUrl.includes('xai') ? 'grok' :
+                                       llmApiUrl.includes('deepseek') ? 'deepseek' : 
+                                       llmApiUrl.includes('anthropic') ? 'anthropic' :
+                                       llmApiUrl.includes('google') ? 'google' : 'openai'); // Default to openai or custom
+
     const apiUrl = llmApiUrl;
-    
-    // Prepare request body based on API provider
     let requestBody: Record<string, unknown>;
-    let isOllama = false;
-    
-    if (isOllamaApi) {
-      // Ollama API format
-      requestBody = {
-        model: model || 'llama2',
-        prompt: promptTemplate,
-        stream: false
-      };
-      isOllama = true;
-      console.log('使用 Ollama API 格式, 生成内容请求:', JSON.stringify(requestBody));
-    } else if (isGrokApi) {
-      // Grok API format
-      requestBody = {
+    let isOllamaPayload = false; // Specific flag for Ollama's unique payload for /api/generate
+
+    // Construct request body based on providerType
+    switch (providerType) {
+      case 'ollama':
+        // Note: Ollama has /api/generate (prompt string) and /api/chat (messages array)
+        // This logic assumes /api/generate if a simple prompt string is used,
+        // or /api/chat if messages are structured.
+        // For simplicity, current promptTemplate is a string, matching /api/generate.
+        requestBody = {
+          model: model || API_PROVIDER_CONFIG.ollama.defaultModel || 'llama2',
+          prompt: promptTemplate,
+          stream: false,
+        };
+        isOllamaPayload = true; // Mark for proxy if special handling is needed for /api/generate
+        console.log('Using Ollama API format, generate content request:', JSON.stringify(requestBody));
+        break;
+      case 'grok':
+        requestBody = {
+          messages: [{ role: 'user', content: promptTemplate }],
+          model: model || API_PROVIDER_CONFIG.grok.defaultModel || 'grok-3-latest',
+          temperature: 0.7,
+          stream: false,
+        };
+        break;
+      case 'deepseek':
+        requestBody = {
+          model: model || API_PROVIDER_CONFIG.deepseek.defaultModel || 'deepseek-chat',
+          messages: [{ role: 'user', content: promptTemplate }],
+          temperature: 0.7,
+          stream: false,
+        };
+        break;
+      case 'anthropic':
+        requestBody = {
+          model: model || API_PROVIDER_CONFIG.anthropic.defaultModel || 'claude-3-opus-20240229',
+          messages: [{ role: 'user', content: promptTemplate }],
+          max_tokens: request.wordCount ? request.wordCount * 5 : 4000, // Anthropic requires max_tokens
+          temperature: 0.7,
+        }
+        break;
+      case 'google': // Gemini
+         requestBody = {
+          contents: [{ parts: [{ text: promptTemplate }] }],
+          // generationConfig can be added here if needed (temperature, maxOutputTokens, etc.)
+        };
+        // Note: Google Gemini might not use 'model' in the body if it's part of the URL.
+        // The URL itself often specifies the model:
+        // https://generativelanguage.googleapis.com/v1beta/models/gemini-pro:generateContent
+        // or https://generativelanguage.googleapis.com/v1beta/models/gemini-1.5-pro-latest:generateContent
+        break;
+      case 'openai':
+      case 'custom': // Assuming custom might follow OpenAI format
+      default:
+        requestBody = {
+          model: model || API_PROVIDER_CONFIG.openai.defaultModel || 'gpt-4',
         messages: [
-          {
-            role: 'user',
-            content: promptTemplate
-          }
-        ],
-        model: "grok-3-latest",
-        temperature: 0.7,
-        stream: false
-      };
-    } else if (isDeepSeekApi) {
-      // DeepSeek API format (与 OpenAI 兼容但有自己的模型名称)
-      requestBody = {
-        model: model || 'deepseek-chat',
-        messages: [
-          {
-            role: 'user',
-            content: promptTemplate
-          }
-        ],
-        temperature: 0.7,
-        stream: false
-      };
-    } else {
-      // OpenAI-compatible API format (default)
-      requestBody = {
-        model: model || 'gpt-4',
-        messages: [
-          {
-            role: 'user',
-            content: promptTemplate
-          }
-        ],
-        temperature: 0.7
-      };
-    }
-    
-    // Prepare headers based on API provider
-    const headers: Record<string, string> = {
-      'Content-Type': 'application/json',
-    };
-    
-    // Add appropriate authorization header if not Ollama
-    if (!isOllamaApi) {
-      headers['Authorization'] = `Bearer ${llmApiKey}`;
+          messages: [{ role: 'user', content: promptTemplate }],
+          temperature: 0.7,
+        };
+        break;
     }
 
-    console.log('准备发送请求到:', apiUrl);
-    console.log('请求头:', JSON.stringify(headers, null, 2).replace(llmApiKey, '[REDACTED]'));
-    console.log('请求体:', JSON.stringify(requestBody, null, 2));
-    
-    // 使用本地 API 代理来避免 CORS 问题
-    try {
-      // 尝试使用本地代理
-      const proxyResponse = await fetch('/api/proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          targetUrl: apiUrl,  // 使用可能修正后的 URL
-          headers,
-          body: requestBody,
-          isOllama
-        })
-      });
-      
-      if (!proxyResponse.ok) {
-        const errorData = await proxyResponse.json().catch(() => ({ error: { message: `代理服务错误: ${proxyResponse.status}` } }));
-        throw new Error(errorData.error?.message || `代理服务错误: ${proxyResponse.status}: ${proxyResponse.statusText}`);
-      }
-      
-      const data = await proxyResponse.json();
-      console.log('API 响应:', data);
-      
-      // 保存原始响应用于调试
-      console.log('原始 API 响应:', JSON.stringify(data, null, 2));
-      
-      // 以与测试页面相同的方式尝试不同方法提取内容
-      let content = '';
-      
-      if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
-        // 标准格式
-        content = data.choices[0].message.content;
-        console.log('从 choices[0].message.content 提取内容');
-      } else if (data.message && data.message.content) {
-        // 替代格式1
-        content = data.message.content;
-        console.log('从 message.content 提取内容');
-      } else if (data.content) {
-        // 替代格式2
-        content = data.content;
-        console.log('从 content 提取内容');
-      } else if (data.output) {
-        // 替代格式3
-        content = data.output;
-        console.log('从 output 提取内容');
-      } else if (data.response) {
-        // 替代格式4
-        content = data.response;
-        console.log('从 response 提取内容');
-      } else if (data.text) {
-        // 替代格式5
-        content = data.text;
-        console.log('从 text 提取内容');
-      } else if (typeof data === 'string') {
-        // 可能整个响应就是文本
-        content = data;
-        console.log('使用整个响应作为内容');
-      } else if (data.error) {
-        // 有明确的错误信息
-        throw new Error(`API 错误: ${data.error.message || JSON.stringify(data.error)}`);
-      } else {
-        // 无法解析的响应
-        throw new Error(`无法从API响应中提取内容: ${JSON.stringify(data)}`);
-      }
-      
-      return { content };
-    } catch (proxyError) {
-      console.error('代理请求失败:', proxyError);
-      throw proxyError;
+    const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+    if (providerType !== 'ollama' && providerType !== 'custom' && llmApiKey) { // Custom might not need API key
+      headers['Authorization'] = `Bearer ${llmApiKey}`;
+    } else if (providerType === 'custom' && llmApiKey) { // For custom, if key is provided, use it
+       headers['Authorization'] = `Bearer ${llmApiKey}`;
     }
+    // For Google, API key is often part of the URL query string `?key=YOUR_API_KEY`
+    // The proxy should handle this if targetUrl already includes it, or it needs to be appended here.
+    // Current proxy structure might need adjustment for query param keys.
+    // For simplicity, assuming key is in header if not ollama/custom.
+
+    console.log('Preparing to send request to proxy for:', apiUrl);
+    console.log('Provider type:', providerType);
+    console.log('Request headers (API key redacted for non-Ollama/Custom):', 
+                JSON.stringify(headers, null, 2).replace(llmApiKey && providerType !== 'ollama' ? llmApiKey : 'DUMMY_KEY_FOR_REPLACE', '[REDACTED]'));
+    console.log('Request body:', JSON.stringify(requestBody, null, 2));
+
+    const proxyResponse = await fetch('/api/proxy', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        targetUrl: apiUrl,
+        headers,
+        body: requestBody,
+        isOllama: isOllamaPayload, // Use the specific flag for Ollama /api/generate payload
+      }),
+    });
+
+    if (!proxyResponse.ok) {
+      const errorText = await proxyResponse.text();
+      console.error('Proxy service error response text:', errorText);
+      const errorData = JSON.parse(errorText || "{}"); // Try to parse, fallback to empty obj
+      throw new Error(errorData.error?.message || `Proxy service error: ${proxyResponse.status} ${proxyResponse.statusText}`);
+    }
+
+    const data = await proxyResponse.json();
+    console.log('Received API response via proxy:', data);
+
+    let content = '';
+    // Adapt response parsing based on providerType more explicitly
+    switch (providerType) {
+      case 'openai':
+      case 'deepseek':
+      case 'grok': // Grok's actual response might differ, this is based on typical chat completion
+      case 'custom': // Assuming custom might follow OpenAI structure
+        if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
+          content = data.choices[0].message.content;
+        }
+        break;
+      case 'ollama':
+        if (data.response) { // For /api/generate (prompt string)
+          content = data.response;
+        } else if (data.message && data.message.content) { // For /api/chat (messages array)
+          content = data.message.content;
+        }
+        break;
+      case 'anthropic':
+         if (data.content && Array.isArray(data.content) && data.content.length > 0 && data.content[0].text) {
+            content = data.content[0].text;
+        } else if (typeof data.content === 'string') { // Less common, but possible
+            content = data.content;
+        }
+        break;
+      case 'google': // Gemini
+        if (data.candidates && data.candidates.length > 0 &&
+            data.candidates[0].content && data.candidates[0].content.parts &&
+            data.candidates[0].content.parts.length > 0 && data.candidates[0].content.parts[0].text) {
+          content = data.candidates[0].content.parts[0].text;
+        }
+        break;
+      default:
+        // Fallback for any other or unhandled structures
+        if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
+            content = data.choices[0].message.content;
+        } else if (data.message && data.message.content) {
+            content = data.message.content;
+        } else if (data.content) {
+            content = typeof data.content === 'string' ? data.content : JSON.stringify(data.content);
+        } else if (data.response) {
+            content = data.response;
+        } else if (data.text) {
+            content = data.text;
+        } else if (typeof data === 'string') {
+            content = data;
+        }
+        break;
+    }
+     if (data.error) { // Handle explicit error messages from API
+        throw new Error(`API error for ${providerType}: ${data.error.message || JSON.stringify(data.error)}`);
+    }
+    if (!content && providerType !== 'google') { // Google might have valid empty content if generation safety filters trigger
+        console.warn(`Could not extract content for provider ${providerType} from response:`, data);
+        // Do not throw error for empty content, but log it. Let calling component decide.
+        // For now, returning stringified data for debugging if content is empty.
+        // This behavior might need refinement.
+        content = `No standard content field found. Raw response: ${JSON.stringify(data)}`;
+    }
+
+
+    return { content };
   } catch (error) {
-    console.error('生成内容错误:', error);
-    return {
-      content: '',
-      error: error instanceof Error ? error.message : '未知错误'
-    };
+    console.error('Error in _internalGenerateContent:', error);
+    return { content: '', error: error instanceof Error ? error.message : 'Unknown error in API utility' };
   }
 }
+
+// The old generateContent function has been removed.
+// Components should now use useApiConfiguredGenerator.
+
+export const useApiConfiguredGenerator = (apiProviderType: ApiProvider) => {
+  const { getProviderSetting } = useApiSettings();
+
+  const configuredGenerateContent = useCallback(async (
+    request: Omit<WritingRequest, 'llmApiKey' | 'llmApiUrl' | 'model' | 'apiProvider'>
+  ): Promise<ApiResponse> => {
+    const globalSetting = getProviderSetting(apiProviderType);
+    const providerConfig = API_PROVIDER_CONFIG[apiProviderType];
+
+    if (!providerConfig) {
+      return { content: '', error: `Invalid API provider type: ${apiProviderType}` };
+    }
+
+    const apiKey = globalSetting?.apiKey || '';
+    const apiUrl = globalSetting?.customUrl || providerConfig.url;
+    // Model precedence: User's choice in component (if passed in `request.model`), 
+    // then global setting, then provider default from API_PROVIDER_CONFIG
+    // The `request` for `configuredGenerateContent` doesn't include `model`, so it's global then config.
+    const modelToUse = globalSetting?.defaultModel || providerConfig.defaultModel || '';
+
+    if (!apiUrl) {
+        return { content: '', error: `API URL for ${apiProviderType} is not configured.`};
+    }
+    // For 'custom' provider, model might not be mandatory if the custom endpoint doesn't require it.
+    // For 'google', model is part of URL path, so `modelToUse` here is for body if needed or logging.
+    if (!modelToUse && apiProviderType !== 'custom' && apiProviderType !== 'google') { 
+        return { content: '', error: `Model for ${apiProviderType} is not configured.`};
+    }
+    // 'custom' provider might not require an API key, or it might be part of custom URL or headers.
+    if (apiProviderType !== 'ollama' && apiProviderType !== 'custom' && !apiKey) {
+        return { content: '', error: `API Key for ${apiProviderType} is not configured.`};
+    }
+
+
+    const fullRequest: WritingRequest = {
+      ...request, // Contains promptStyle, topic, keywords, wordCount
+      llmApiKey: apiKey,
+      llmApiUrl: apiUrl,
+      model: modelToUse,
+      apiProvider: apiProviderType,
+    };
+    
+    return _internalGenerateContent(fullRequest);
+
+  }, [apiProviderType, getProviderSetting]);
+
+  return configuredGenerateContent;
+};
+
 
 export function formatPromptTemplate(
   style: PromptStyle, 
@@ -177,10 +258,12 @@ export function formatPromptTemplate(
   const keywordsStr = keywords.join('、');
   
   // Construct the complete prompt
+  // Ensure wordCount is handled appropriately if it's 0 or not provided by user
+  const wordCountText = wordCount > 0 ? `${wordCount}字` : '适当长度';
   return `${styleJson}
 
 ---
-遵循以上风格为我编写一篇${wordCount}字的文章，主题是${topic}，输出格式为markdown。
+遵循以上风格为我编写一篇${wordCountText}的文章，主题是${topic}，输出格式为markdown。
 关键词：${keywordsStr}`;
 }
 

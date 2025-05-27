@@ -52,6 +52,7 @@ export interface WritingRequest {
   llmApiUrl: string;
   llmApiKey: string;
   model: string;
+  apiProvider: ApiProvider; // Added apiProvider
 }
 
 export interface PolishRequest {

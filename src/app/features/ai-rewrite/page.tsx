@@ -1,10 +1,11 @@
 "use client";
 
-import React, { useState, useEffect } from 'react'; // Added useEffect
+import React, { useState } from 'react'; // Removed useEffect
 import FeatureLayout from '../../components/FeatureLayout';
-import ApiSettings from '../../components/ApiSettings'; // ApiProvider type will be imported from constants
-import { ApiResponse } from '../../../app/lib/types';
-import { API_PROVIDER_CONFIG, ApiProvider } from '../../../app/lib/constants'; // Import centralized config
+// ApiSettings import removed
+import { ApiResponse, WritingRequest, PromptStyle } from '../../../app/lib/types'; // Added WritingRequest, PromptStyle
+import { API_PROVIDER_CONFIG, ApiProvider } from '../../../app/lib/constants';
+import { useApiConfiguredGenerator } from '../../../app/lib/api'; // Import the new hook
 
 // 预设的洗稿 prompt
 const presetPrompts = [
@@ -236,8 +237,15 @@ export default function AIRewritePage() {
   const [llmApiUrl, setLlmApiUrl] = useState<string>(initialConfig.url);
   const [llmApiKey, setLlmApiKey] = useState<string>('');
   const [model, setModel] = useState<string>(initialConfig.defaultModel || '');
-  const [showApiSettings, setShowApiSettings] = useState<boolean>(true);
-  const [availableModels, setAvailableModels] = useState<string[]>(initialConfig.availableModels || []);
+  const [showApiSettings, setShowApiSettings] = useState<boolean>(true); // This will be removed
+  const [availableModels, setAvailableModels] = useState<string[]>(initialConfig.availableModels || []); // This will be removed
+
+  // useEffect for fetchOllamaModels was removed.
+
+  // Define the designated provider type for this component
+  const DESIGNATED_PROVIDER_TYPE: ApiProvider = 'openai';
+  const configuredGenerate = useApiConfiguredGenerator(DESIGNATED_PROVIDER_TYPE);
+
 
   // 获取当前选中的预设prompt文本
   const getSelectedPromptText = () => {
@@ -246,190 +254,22 @@ export default function AIRewritePage() {
     return selected ? selected.prompt : '';
   };
 
-  // 获取 Ollama 模型列表
-  const fetchOllamaModels = async () => {
-    try {
-      setError(null);
+  // Removed fetchOllamaModels and toggleApiSettings
+  // Removed getContentFromApi
 
-      const response = await fetch('/api/proxy/ollama-models', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          ollamaUrl: 'http://localhost:11434/api/tags'
-        }),
-        signal: AbortSignal.timeout(5000)
-      });
-
-      if (!response.ok) {
-        throw new Error(`无法获取模型列表: ${response.status} ${response.statusText}`);
-      }
-
-      const data = await response.json();
-
-      // 处理模型列表
-      let modelsList: string[] = [];
-
-      if (data.models && Array.isArray(data.models)) {
-        modelsList = data.models.filter((model: unknown) => typeof model === 'string') as string[];
-      } else if (data.names && Array.isArray(data.names)) {
-        modelsList = data.names.filter((model: unknown) => typeof model === 'string') as string[];
-      }
-
-      if (modelsList.length > 0) {
-        setAvailableModels(modelsList);
-
-        // 如果当前模型不在列表中，则选择第一个模型
-        if (!modelsList.includes(model)) {
-          setModel(modelsList[0]);
-        }
-      } else {
-        setAvailableModels([]);
-      }
-
-      return modelsList;
-    } catch (error) {
-      console.error('获取模型列表失败:', error);
-      setAvailableModels([]);
-
-      if (error instanceof TypeError && error.message.includes('Failed to fetch')) {
-        setError('无法连接到 Ollama 服务，请确保 Ollama 已安装并运行');
-      } else if (error instanceof DOMException && error.name === 'AbortError') {
-        setError('获取模型列表超时，请检查 Ollama 服务是否响应');
-      } else {
-        setError('无法获取 Ollama 模型列表，请确保 Ollama 服务正在运行');
-      }
-
-      return [];
-    }
+  // Minimal prompt style, as the main instructions are in the selected/custom prompt
+  const minimalPromptStyle: PromptStyle = {
+    style_summary: "Text rewrite/optimization",
+    language: { sentence_pattern: [], word_choice: { formality_level: 3, preferred_words: [], avoided_words: [] }, rhetoric: [] },
+    structure: { paragraph_length: "medium", transition_style: "smooth", hierarchy_pattern: "standard" },
+    narrative: { perspective: "objective", time_sequence: "as_is", narrator_attitude: "neutral" },
+    emotion: { intensity: 0, expression_style: "neutral", tone: "neutral" },
+    thinking: { logic_pattern: "direct", depth: 3, rhythm: "varied" },
+    uniqueness: { signature_phrases: [], imagery_system: [] },
+    cultural: { allusions: [], knowledge_domains: [] },
+    rhythm: { syllable_pattern: "varied", pause_pattern: "natural", tempo: "medium" },
   };
 
-  // 处理API设置的显示/隐藏
-  const toggleApiSettings = () => {
-    setShowApiSettings(!showApiSettings);
-  };
-
-  // 直接从API获取内容
-  const getContentFromApi = async (prompt: string, text: string): Promise<ApiResponse> => {
-    try {
-      // 检测API提供商类型
-      const isGrokApi = llmApiUrl.includes('grok') || llmApiUrl.includes('xai');
-      const isOllamaApi = llmApiUrl.includes('ollama') || llmApiUrl.includes('11434');
-      const isDeepSeekApi = llmApiUrl.includes('deepseek');
-
-      // 准备请求体
-      let requestBody: Record<string, unknown>;
-      let isOllama = false;
-
-      const fullPrompt = prompt.includes('{text}') 
-        ? prompt.replace('{text}', text)
-        : `${prompt}\n\n原文：\n${text}`;
-
-      if (isOllamaApi) {
-        // Ollama API格式
-        requestBody = {
-          model: model || 'llama2',
-          prompt: fullPrompt,
-          stream: false
-        };
-        isOllama = true;
-      } else if (isGrokApi) {
-        // Grok API格式
-        requestBody = {
-          messages: [
-            { role: 'user', content: fullPrompt }
-          ],
-          model: model || "grok-3-latest",
-          temperature: 0.7,
-          stream: false
-        };
-      } else if (isDeepSeekApi) {
-        // DeepSeek API格式
-        requestBody = {
-          model: model || 'deepseek-chat',
-          messages: [
-            { role: 'user', content: fullPrompt }
-          ],
-          temperature: 0.7,
-          stream: false
-        };
-      } else {
-        // OpenAI兼容格式（默认）
-        requestBody = {
-          model: model || 'gpt-4',
-          messages: [
-            { role: 'user', content: fullPrompt }
-          ],
-          temperature: 0.7
-        };
-      }
-
-      // 准备请求头
-      const headers: Record<string, string> = {
-        'Content-Type': 'application/json',
-      };
-
-      // 如果不是Ollama，添加授权头
-      if (!isOllamaApi && llmApiKey) {
-        headers['Authorization'] = `Bearer ${llmApiKey}`;
-      }
-
-      // 使用代理API避免CORS问题
-      const proxyResponse = await fetch('/api/proxy', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          targetUrl: llmApiUrl,
-          headers,
-          body: requestBody,
-          isOllama
-        })
-      });
-
-      if (!proxyResponse.ok) {
-        const errorData = await proxyResponse.json().catch(() => ({
-          error: { message: `代理服务错误: ${proxyResponse.status}` }
-        }));
-        throw new Error(errorData.error?.message || `代理服务错误: ${proxyResponse.status}`);
-      }
-
-      const data = await proxyResponse.json();
-
-      // 尝试不同方式提取内容
-      let content = '';
-
-      if (data.choices && data.choices.length > 0 && data.choices[0].message && data.choices[0].message.content) {
-        content = data.choices[0].message.content;
-      } else if (data.message && data.message.content) {
-        content = data.message.content;
-      } else if (data.content) {
-        content = data.content;
-      } else if (data.output) {
-        content = data.output;
-      } else if (data.response) {
-        content = data.response;
-      } else if (data.text) {
-        content = data.text;
-      } else if (typeof data === 'string') {
-        content = data;
-      } else if (data.error) {
-        throw new Error(`API 错误: ${data.error.message || JSON.stringify(data.error)}`);
-      } else {
-        throw new Error(`无法从API响应中提取内容: ${JSON.stringify(data)}`);
-      }
-
-      return { content };
-    } catch (error) {
-      console.error('API请求错误:', error);
-      return {
-        content: '',
-        error: error instanceof Error ? error.message : '未知错误'
-      };
-    }
-  };
 
   // 处理提交
   const handleSubmit = async (e: React.FormEvent) => {
@@ -443,76 +283,85 @@ export default function AIRewritePage() {
     setApiResponseDetails(null);
 
     try {
-      // 检查 API 密钥
-      if (apiProvider !== 'ollama' && !llmApiKey) {
-        throw new Error(`使用 ${apiProvider === 'openai' ? 'OpenAI' : apiProvider === 'grok' ? 'Grok' : apiProvider === 'deepseek' ? 'DeepSeek' : '自定义'} API 需要提供有效的 API 密钥`);
-      }
-
-      // 获取所选提示词文本
-      const promptText = getSelectedPromptText();
+      // API Key check removed, handled by hook
+      const basePromptText = getSelectedPromptText();
       
-      // 如果启用了两步处理模式
+      let finalResult = '';
+      let stepDetails = '';
+
       if (useTwoStepMode && selectedPromptId === 'human-writing') {
-        // 第一步：使用AI修改指导获取策略
         setProcessingStep('正在分析文本并生成优化策略...');
+        const aiGuideRawPrompt = presetPrompts.find(p => p.id === 'ai-guide')?.prompt || '';
         
-        // 获取AI修改指导的prompt
-        const aiGuidePrompt = presetPrompts.find(p => p.id === 'ai-guide')?.prompt || '';
-        
-        // 调用API获取修改策略
-        const strategiesResponse = await getContentFromApi(aiGuidePrompt, content);
+        // For AI Guide, the user's text *is* the content of the prompt itself (as per its structure)
+        // So, the topic for configuredGenerate will be the aiGuidePrompt with {text} replaced by user's content.
+        const aiGuideFullPrompt = aiGuideRawPrompt.replace('[用户输入的内容示例或描述]', content);
+
+        const strategiesResponse = await configuredGenerate({
+          topic: aiGuideFullPrompt, // The AI Guide prompt IS the topic
+          promptStyle: minimalPromptStyle, // Use a generic style
+          keywords: [],
+          wordCount: 0, // Word count not directly applicable for strategy generation
+        });
         
         if (strategiesResponse.error) {
           throw new Error(`生成策略失败: ${strategiesResponse.error}`);
         }
+        stepDetails += `【第一步：优化策略生成】\n${strategiesResponse.content}\n\n`;
         
-        // 第二步：使用生成的策略作为指导，应用人类写作特征优化
         setProcessingStep('正在根据策略优化文本...');
-        
-        // 构建新的prompt，结合策略和人类写作特征
-        const humanWritingPrompt = presetPrompts.find(p => p.id === 'human-writing')?.prompt || '';
-        
-        const combinedPrompt = `
-${humanWritingPrompt}
+        const humanWritingBasePrompt = presetPrompts.find(p => p.id === 'human-writing')?.prompt || '';
+        const combinedPromptForRewrite = `
+${humanWritingBasePrompt}
 
 同时，请特别注意以下针对此文本的具体优化策略：
-
 ${strategiesResponse.content}
 
-请根据以上策略和原则重写文本，确保文本既包含原文的核心信息，又具有自然的人类表达特征。仅输出优化后的文本，不要包含策略分析或说明。
+请根据以上策略和原则重写以下文本，确保文本既包含原文的核心信息，又具有自然的人类表达特征。仅输出优化后的文本，不要包含策略分析或说明。
+
+原文：
+${content}
         `.trim();
         
-        // 使用组合prompt调用API
-        const finalResponse = await getContentFromApi(combinedPrompt, content);
+        const finalResponse = await configuredGenerate({
+          topic: combinedPromptForRewrite, // The combined prompt IS the topic
+          promptStyle: minimalPromptStyle,
+          keywords: [],
+          wordCount: 0, // Actual word count of the content will be rewritten
+        });
         
         if (finalResponse.error) {
           throw new Error(`文本优化失败: ${finalResponse.error}`);
         }
-        
-        setResult(finalResponse.content);
-        
-        // 记录策略详情以便查看
-        setApiResponseDetails(`
-【第一步：优化策略生成】
-${strategiesResponse.content}
+        finalResult = finalResponse.content;
+        stepDetails += `【第二步：根据策略进行优化】\n已使用上述策略优化文本。`;
 
-【第二步：根据策略进行优化】
-已使用上述策略优化文本。
-        `.trim());
       } else {
-        // 常规处理 - 单步模式
-        const response = await getContentFromApi(promptText, content);
+        // Single-step mode
+        // The selected prompt itself acts as instructions around the user's text.
+        // The user's text ({text} or appended) becomes part of the 'topic'.
+        const fullTopicForRewrite = basePromptText.includes('{text}')
+            ? basePromptText.replace('{text}', content)
+            : `${basePromptText}\n\n原文：\n${content}`;
+
+        const response = await configuredGenerate({
+          topic: fullTopicForRewrite,
+          promptStyle: minimalPromptStyle, // Or a specific style if prompts imply one
+          keywords: [],
+          wordCount: 0, // Let the prompt guide length, or use original content length
+        });
         
         if (response.error) {
-          setError(response.error);
-          setApiResponseDetails('请查看浏览器控制台以获取更多错误详情。');
-        } else if (!response.content || response.content.trim() === '') {
-          setError('API 返回了空内容。这可能是由于 API 响应格式不符合预期。');
-          setApiResponseDetails('请尝试切换 API 提供商或检查 API 密钥和 URL 是否正确。');
-        } else {
-          setResult(response.content);
+          throw new Error(response.error);
         }
+        finalResult = response.content;
       }
+      
+      setResult(finalResult);
+      if (stepDetails) {
+        setApiResponseDetails(stepDetails);
+      }
+
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : '处理文本时发生未知错误';
       setError(errorMessage);
@@ -556,45 +405,11 @@ ${strategiesResponse.content}
             </div>
           </div>
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* API 设置部分 */}
-            <ApiSettings
-              showSettings={showApiSettings}
-              toggleSettings={toggleApiSettings}
-              apiProvider={apiProvider}
-              setApiProvider={(newProvider: ApiProvider) => {
-                setApiProvider(newProvider); // Update local state
-                // ApiSettings component will internally call setLlmApiUrl and setModel
-                // with new defaults from API_PROVIDER_CONFIG.
-                
-                // Component-specific logic:
-                if (newProvider === 'ollama') {
-                  setLlmApiKey(''); // Clear API key for Ollama
-                  setAvailableModels([]); // Clear for Ollama until fetch completes
-                } else {
-                  const config = API_PROVIDER_CONFIG[newProvider];
-                  setAvailableModels(config.availableModels || []);
-                }
-                setError(null);
-                setApiResponseDetails(null);
-              }}
-              apiUrl={llmApiUrl}
-              setApiUrl={setLlmApiUrl}
-              apiKey={llmApiKey}
-              setApiKey={setLlmApiKey}
-              model={model}
-              setModel={setModel}
-              availableModels={availableModels}
-              fetchModels={fetchOllamaModels} // Pass fetchOllamaModels to ApiSettings
-            />
-
-            { /* useEffect to fetch Ollama models when provider changes to ollama */ }
-            useEffect(() => {
-              if (apiProvider === 'ollama') {
-                fetchOllamaModels();
-              }
-            }, [apiProvider]); {/* Added fetchOllamaModels to dependency array if it's stable, otherwise might cause re-fetches if it's redefined on every render. Assuming it's stable. */}
-
-
+            {/* API Settings UI removed */}
+            <div className="text-sm text-gray-600 bg-blue-50 p-3 rounded-md border border-blue-200">
+              此工具使用全局配置的 <strong>{API_PROVIDER_CONFIG[DESIGNATED_PROVIDER_TYPE].helpText.split(" ")[0]}</strong> API 设置。
+              您可以在 <a href="/settings/api-management" className="text-blue-600 hover:underline">全局模型接口页面</a> 修改配置。
+            </div>
             <div>
               <label className="block text-sm font-medium text-gray-700 mb-2">
                 输入需要处理的文本
@@ -705,8 +520,8 @@ ${strategiesResponse.content}
             <div className="flex justify-end">
               <button
                 type="submit"
-                disabled={loading || !content.trim() || (useCustomPrompt && !customPrompt.trim()) || (apiProvider !== 'ollama' && !llmApiKey)}
-                className={`px-4 py-2 rounded-md text-white font-medium ${loading || !content.trim() || (useCustomPrompt && !customPrompt.trim()) || (apiProvider !== 'ollama' && !llmApiKey)
+                disabled={loading || !content.trim() || (useCustomPrompt && !customPrompt.trim())}
+                className={`px-4 py-2 rounded-md text-white font-medium ${loading || !content.trim() || (useCustomPrompt && !customPrompt.trim())
                     ? 'bg-indigo-300 cursor-not-allowed'
                     : 'bg-indigo-600 hover:bg-indigo-700'
                   }`}

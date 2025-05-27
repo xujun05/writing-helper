@@ -1,10 +1,10 @@
 "use client";
 
-import React, { useState, useEffect, useCallback } from 'react';
-import { useApiSettings } from '../../../../contexts/ApiSettingsContext'; // Adjust path if necessary based on actual file structure
-import { API_PROVIDER_CONFIG, ApiProvider } from '../../../../lib/constants'; // Adjust path
-import { GlobalProviderSetting } from '../../../../contexts/ApiSettingsContext.types'; // Adjust path
-// import FeatureLayout from '@/app/components/FeatureLayout'; // Optional: for consistent layout, assuming not used for now
+import React, { useState, useEffect } from 'react'; // Removed useCallback
+import { useApiSettings } from '../../contexts/ApiSettingsContext'; // Corrected path
+import { API_PROVIDER_CONFIG, ApiProvider } from '../../lib/constants'; // Corrected path
+import { GlobalProviderSetting } from '../../contexts/ApiSettingsContext.types'; // Corrected path
+// FeatureLayout import removed
 
 const ApiManagementPage = () => {
   const { globalSettings, saveProviderSetting, getProviderSetting } = useApiSettings();
@@ -72,7 +72,7 @@ const ApiManagementPage = () => {
   }
 
   return (
-    // <FeatureLayout title="Global API Settings" subtitle="Manage API configurations for all tools">
+    // FeatureLayout wrapper removed
     <div className="container mx-auto p-4 md:p-8">
       <header className="mb-8 text-center">
         <h1 className="text-3xl font-bold text-gray-800">Global API Settings</h1>
@@ -191,7 +191,7 @@ const ApiManagementPage = () => {
         </div>
       </div>
     </div>
-    // </FeatureLayout>
+    // FeatureLayout wrapper removed
   );
 };
 
