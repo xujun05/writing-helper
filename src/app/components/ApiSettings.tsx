@@ -3,7 +3,7 @@
 import React, { useEffect } from 'react'; // Removed useState, added useEffect
 import Link from 'next/link'; // Import Link
 import { useApiSettings } from '../contexts/ApiSettingsContext'; // Import useApiSettings
-import { API_PROVIDER_CONFIG, ApiProvider } from '../../lib/constants';
+import { API_PROVIDER_CONFIG, ApiProvider } from '../lib/constants'; // Corrected path
 
 export interface ApiSettingsProps {
   showSettings: boolean;
