@@ -9,6 +9,8 @@ export interface GlobalProviderSetting {
 export type AllGlobalSettings = Partial<Record<ApiProvider, GlobalProviderSetting>>;
 
 export interface ApiSettingsContextType {
+  activeApiProvider: ApiProvider;
+  setActiveApiProvider: (provider: ApiProvider) => void;
   globalSettings: AllGlobalSettings;
   saveProviderSetting: (provider: ApiProvider, settings: GlobalProviderSetting) => void;
   getProviderSetting: (provider: ApiProvider) => GlobalProviderSetting | undefined;

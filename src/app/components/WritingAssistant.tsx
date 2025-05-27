@@ -5,7 +5,8 @@ import { PromptStyle, WritingRequest } from '../lib/types'; // WritingRequest mi
 import { useApiConfiguredGenerator, exportToMarkdown } from '../lib/api'; // Import the new hook, ApiProvider type from constants
 import MarkdownEditor from './MarkdownEditor';
 // ApiSettings import is removed
-import { ApiProvider } from '../lib/constants'; // Import ApiProvider for DESIGNATED_PROVIDER_TYPE
+import { ApiProvider, API_PROVIDER_CONFIG } from '../lib/constants'; // Import ApiProvider and API_PROVIDER_CONFIG
+import { useApiSettings } from '../contexts/ApiSettingsContext'; // Import useApiSettings
 
 const gongwenPromptStyle: PromptStyle = {
   style_name: "GongwenOfficialDocument",
@@ -57,10 +58,10 @@ const gongwenPromptStyle: PromptStyle = {
 
 // API_PROVIDER_CONFIG import might not be needed if all config is through the hook
 
-// Define the designated provider type for this component
-const DESIGNATED_PROVIDER_TYPE: ApiProvider = 'openai';
+// DESIGNATED_PROVIDER_TYPE is removed, will use activeApiProvider from context
 
 export default function WritingAssistant() {
+  const { activeApiProvider } = useApiSettings(); // Get activeApiProvider from context
   // Removed local API settings states: apiProvider, llmApiUrl, llmApiKey, model, showApiSettings, availableModels
   
   const [output, setOutput] = useState<string>('');
@@ -80,8 +81,8 @@ export default function WritingAssistant() {
 
   // Removed: availableModels state, fetchOllamaModels function
 
-  // Integrate the new hook
-  const configuredGenerate = useApiConfiguredGenerator(DESIGNATED_PROVIDER_TYPE);
+  // Integrate the new hook, using activeApiProvider from context
+  const configuredGenerate = useApiConfiguredGenerator(activeApiProvider);
 
   // Functions to handle reference texts
   const handleReferenceTextChange = (index: number, value: string) => {
@@ -227,7 +228,7 @@ export default function WritingAssistant() {
         <div className="text-center mb-10">
           <h1 className="text-4xl font-bold text-gray-800 mb-2">公文写作助手</h1>
           <p className="text-gray-600 max-w-2xl mx-auto">
-            根据您的结构化指令，撰写专业、规范的各类公文。 (使用 {API_PROVIDER_CONFIG[DESIGNATED_PROVIDER_TYPE].helpText.split(" ")[0]} API)
+            根据您的结构化指令，撰写专业、规范的各类公文。 (使用 {API_PROVIDER_CONFIG[activeApiProvider]?.helpText.split(" ")[0] || activeApiProvider} API)
           </p>
         </div>
 
@@ -404,4 +405,4 @@ export default function WritingAssistant() {
       </div>
     </div>
   );
-} 
+}

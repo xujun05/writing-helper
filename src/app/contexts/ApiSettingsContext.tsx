@@ -1,6 +1,7 @@
 // src/app/contexts/ApiSettingsContext.tsx
 import React, { createContext, useContext, useState, useEffect, useCallback, ReactNode } from 'react';
 import { AllGlobalSettings, GlobalProviderSetting, ApiSettingsContextType } from './ApiSettingsContext.types';
+const LOCAL_STORAGE_KEY_ACTIVE_PROVIDER = 'globalWritingHelperActiveApiProvider';
 import { ApiProvider } from '../lib/constants'; // Ensure this path is correct
 
 const LOCAL_STORAGE_KEY = 'globalWritingHelperApiSettings';
@@ -8,7 +9,19 @@ const LOCAL_STORAGE_KEY = 'globalWritingHelperApiSettings';
 export const ApiSettingsContext = createContext<ApiSettingsContextType | undefined>(undefined);
 
 export const ApiSettingsProvider = ({ children }: { children: ReactNode }) => {
+  const [activeApiProvider, setActiveApiProviderState] = useState<ApiProvider>('openai');
   const [globalSettings, setGlobalSettings] = useState<AllGlobalSettings>({});
+
+  useEffect(() => {
+    try {
+      const storedActiveProvider = localStorage.getItem(LOCAL_STORAGE_KEY_ACTIVE_PROVIDER);
+      if (storedActiveProvider) {
+        setActiveApiProviderState(storedActiveProvider as ApiProvider);
+      }
+    } catch (error) {
+      console.error("Failed to load active API provider from localStorage:", error);
+    }
+  }, []);
 
   useEffect(() => {
     try {
@@ -42,8 +55,17 @@ export const ApiSettingsProvider = ({ children }: { children: ReactNode }) => {
     return globalSettings[provider];
   }, [globalSettings]);
 
+  const setActiveApiProvider = useCallback((provider: ApiProvider) => {
+    setActiveApiProviderState(provider);
+    try {
+      localStorage.setItem(LOCAL_STORAGE_KEY_ACTIVE_PROVIDER, provider);
+    } catch (error) {
+      console.error("Failed to save active API provider to localStorage:", error);
+    }
+  }, []);
+
   return (
-    <ApiSettingsContext.Provider value={{ globalSettings, saveProviderSetting, getProviderSetting }}>
+    <ApiSettingsContext.Provider value={{ globalSettings, saveProviderSetting, getProviderSetting, activeApiProvider, setActiveApiProvider }}>
       {children}
     </ApiSettingsContext.Provider>
   );

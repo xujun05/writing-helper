@@ -4,10 +4,10 @@ import React, { useState, useEffect } from 'react'; // Removed useCallback
 import { useApiSettings } from '../../contexts/ApiSettingsContext'; // Corrected path
 import { API_PROVIDER_CONFIG, ApiProvider } from '../../lib/constants'; // Corrected path
 import { GlobalProviderSetting } from '../../contexts/ApiSettingsContext.types'; // Corrected path
-// FeatureLayout import removed
+import FeatureLayout from '../../components/FeatureLayout'; // Corrected path
 
 const ApiManagementPage = () => {
-  const { globalSettings, saveProviderSetting, getProviderSetting } = useApiSettings();
+  const { globalSettings, saveProviderSetting, getProviderSetting, setActiveApiProvider } = useApiSettings();
   const [selectedProvider, setSelectedProvider] = useState<ApiProvider>('openai');
 
   // Form states
@@ -51,7 +51,8 @@ const ApiManagementPage = () => {
     }
 
     saveProviderSetting(selectedProvider, settingsToSave);
-    alert(`${API_PROVIDER_CONFIG[selectedProvider].helpText.split(' ')[0]} settings saved!`); // Simple feedback
+    setActiveApiProvider(selectedProvider); // Set the saved provider as active
+    alert(`${API_PROVIDER_CONFIG[selectedProvider].helpText.split(' ')[0]} settings saved and set as active!`); // Simple feedback
   };
 
   const currentConfig = API_PROVIDER_CONFIG[selectedProvider];
@@ -72,8 +73,8 @@ const ApiManagementPage = () => {
   }
 
   return (
-    // FeatureLayout wrapper removed
-    <div className="container mx-auto p-4 md:p-8">
+    <FeatureLayout title="Global API Settings" subtitle="Manage API configurations that can be used by various AI tools.">
+      <div className="container mx-auto p-4 md:p-8">
       <header className="mb-8 text-center">
         <h1 className="text-3xl font-bold text-gray-800">Global API Settings</h1>
         <p className="text-md text-gray-600 mt-2">Manage API configurations that can be used by various AI tools.</p>
@@ -190,8 +191,8 @@ const ApiManagementPage = () => {
           </div>
         </div>
       </div>
-    </div>
-    // FeatureLayout wrapper removed
+      </div>
+    </FeatureLayout>
   );
 };
 
